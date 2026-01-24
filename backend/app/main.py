@@ -6,7 +6,8 @@ from .api import (
     users_router,
     training_router,
     recognition_router,
-    schools_router
+    schools_router,
+    samples_router
 )
 
 app = FastAPI(
@@ -30,6 +31,7 @@ app.include_router(users_router)
 app.include_router(training_router)
 app.include_router(recognition_router)
 app.include_router(schools_router)
+app.include_router(samples_router)
 
 
 @app.get("/")

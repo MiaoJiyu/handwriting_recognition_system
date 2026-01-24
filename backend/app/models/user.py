@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -14,16 +14,17 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), nullable=False, index=True)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.STUDENT)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # 关系
+
+    # Relationships
     school = relationship("School", back_populates="users")
-    samples = relationship("Sample", back_populates="user")
+    samples = relationship("Sample", back_populates="user", cascade="all, delete-orphan")
     recognition_logs = relationship("RecognitionLog", back_populates="user")
+    user_features = relationship("UserFeature", back_populates="user", cascade="all, delete-orphan")

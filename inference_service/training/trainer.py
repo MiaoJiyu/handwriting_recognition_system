@@ -69,10 +69,52 @@ class Trainer:
         self.training_status = {}  # 存储训练状态
     
     def _load_samples_from_db(self) -> List[Dict]:
-        """从数据库加载样本（这里需要实现数据库连接）"""
-        # TODO: 实现数据库查询
-        # 暂时返回空列表
-        return []
+        """从数据库加载样本"""
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import text
+            from core.config import settings
+            
+            engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+            SessionLocal = sessionmaker(bind=engine)
+            db = SessionLocal()
+            
+            # 查询已处理的样本（使用SQL直接查询）
+            result_set = db.execute(text("""
+                SELECT s.id, s.user_id, s.image_path, s.extracted_region_path, s.status
+                FROM samples s
+                WHERE s.status = 'PROCESSED'
+            """))
+            
+            result = []
+            for row in result_set:
+                sample_id = row[0]
+                # 获取区域信息
+                region_result = db.execute(
+                    text("SELECT bbox FROM sample_regions WHERE sample_id = :sample_id LIMIT 1"),
+                    {"sample_id": sample_id}
+                ).first()
+                
+                annotation_data = None
+                if region_result:
+                    import json
+                    annotation_data = {"bbox": json.loads(region_result[0])}
+                
+                result.append({
+                    "id": sample_id,
+                    "user_id": row[1],
+                    "image_path": row[2],
+                    "extracted_region_path": row[3],
+                    "annotation_data": annotation_data,
+                    "separation_mode": "auto"
+                })
+            
+            db.close()
+            return result
+        except Exception as e:
+            logger.error(f"从数据库加载样本失败: {str(e)}")
+            return []
     
     def _create_triplets(self, samples: List[Dict]) -> List[Tuple[Dict, Dict, Dict]]:
         """创建Triplet样本对"""
@@ -185,6 +227,9 @@ class Trainer:
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.model_manager.save_model(model, version)
             
+            # 提取所有用户特征并更新特征库
+            await self._update_user_features(samples, version)
+            
             self.training_status[job_id] = {
                 "status": "completed",
                 "progress": 1.0,
@@ -206,6 +251,96 @@ class Trainer:
         # 这里应该实现真正的triplet loss
         # 暂时返回一个简单的损失
         return torch.mean(torch.sum(features ** 2, dim=1))
+    
+    async def _update_user_features(self, samples: List[Dict], model_version: str):
+        """更新用户特征库"""
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import text
+            from core.config import settings
+            from feature_extraction.feature_fusion import FeatureFusion
+            import json
+            
+            engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+            SessionLocal = sessionmaker(bind=engine)
+            db = SessionLocal()
+            
+            feature_fusion = FeatureFusion()
+            
+            # 按用户分组样本
+            user_samples = {}
+            for sample in samples:
+                user_id = sample["user_id"]
+                if user_id not in user_samples:
+                    user_samples[user_id] = []
+                user_samples[user_id].append(sample)
+            
+            # 为每个用户提取并更新特征
+            for user_id, user_sample_list in user_samples.items():
+                try:
+                    # 提取所有样本的特征
+                    features_list = []
+                    for sample in user_sample_list:
+                        processed_image, _ = self.image_processor.process_sample(
+                            sample["image_path"],
+                            separation_mode=sample.get("separation_mode", "auto"),
+                            annotation=sample.get("annotation_data")
+                        )
+                        features = feature_fusion.extract_fused_features(processed_image)
+                        features_list.append(features)
+                    
+                    # 计算平均特征
+                    if len(features_list) > 0:
+                        avg_features = np.mean(features_list, axis=0)
+                        feature_vector_str = json.dumps(avg_features.tolist())
+                        sample_ids_str = json.dumps([s["id"] for s in user_sample_list])
+                        
+                        # 检查是否存在
+                        existing = db.execute(
+                            text("SELECT id FROM user_features WHERE user_id = :user_id"),
+                            {"user_id": user_id}
+                        ).first()
+                        
+                        if existing:
+                            # 更新
+                            db.execute(
+                                text("""
+                                    UPDATE user_features 
+                                    SET feature_vector = :feature_vector, 
+                                        sample_ids = :sample_ids,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE user_id = :user_id
+                                """),
+                                {
+                                    "user_id": user_id,
+                                    "feature_vector": feature_vector_str,
+                                    "sample_ids": sample_ids_str
+                                }
+                            )
+                        else:
+                            # 插入
+                            db.execute(
+                                text("""
+                                    INSERT INTO user_features (user_id, feature_vector, sample_ids)
+                                    VALUES (:user_id, :feature_vector, :sample_ids)
+                                """),
+                                {
+                                    "user_id": user_id,
+                                    "feature_vector": feature_vector_str,
+                                    "sample_ids": sample_ids_str
+                                }
+                            )
+                        
+                        db.commit()
+                except Exception as e:
+                    logger.error(f"更新用户 {user_id} 的特征失败: {str(e)}")
+                    db.rollback()
+                    continue
+            
+            db.close()
+        except Exception as e:
+            logger.error(f"更新用户特征库失败: {str(e)}")
     
     async def get_status(self, job_id: int) -> Dict:
         """获取训练状态"""
