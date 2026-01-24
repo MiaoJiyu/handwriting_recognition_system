@@ -4,7 +4,6 @@ from .core.config import settings
 from .api import (
     auth_router,
     users_router,
-    samples_router,
     training_router,
     recognition_router,
     schools_router
@@ -19,7 +18,7 @@ app = FastAPI(
 # CORS配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,7 +27,6 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth_router)
 app.include_router(users_router)
-app.include_router(samples_router)
 app.include_router(training_router)
 app.include_router(recognition_router)
 app.include_router(schools_router)

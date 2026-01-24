@@ -1,5 +1,5 @@
 PyQt6==6.6.1
 grpcio==1.59.3
 grpcio-tools==1.59.3
-pillow==10.1.0
+pillow>=10.2.0
 python-dotenv==1.0.0

@@ -1,4 +1,7 @@
+from typing import List, Annotated
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
+import json
 
 
 class Settings(BaseSettings):
@@ -24,8 +27,25 @@ class Settings(BaseSettings):
     SAMPLES_DIR: str = "./uploads/samples"
     MODELS_DIR: str = "./models"
     
-    # CORS配置
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS配置 - store as string to avoid JSON parsing issues
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS_ORIGINS from string (JSON or comma-separated) to list."""
+        if not self.CORS_ORIGINS or not self.CORS_ORIGINS.strip():
+            return ["http://localhost:3000", "http://localhost:5173"]
+        
+        # Try to parse as JSON first
+        try:
+            parsed = json.loads(self.CORS_ORIGINS)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+        
+        # If JSON parsing fails, treat as comma-separated string
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
     
     class Config:
         env_file = ".env"

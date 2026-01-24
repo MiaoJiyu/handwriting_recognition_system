@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# 模型文件
+*.pth
+*.pt
+*.onnx
+models/
+
+# 上传文件
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+
+# 环境变量
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+logs/
+
+# 数据库
+*.db
+*.sqlite
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 构建输出
+frontend/dist/
+frontend/build/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store

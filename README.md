@@ -34,10 +34,31 @@ CREATE DATABASE handwriting_recognition CHARACTER SET utf8mb4 COLLATE utf8mb4_un
 ```bash
 cd backend
 pip install -r requirements.txt
+cp .env.example .env
 # 配置 .env 文件
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+**注意**: 如果遇到 `libstdc++.so.6` 或 Nix Python 相关的错误，可以使用以下解决方案：
+
+1. **使用修复脚本**（推荐）:
+   ```bash
+   cd backend
+   ./fix_venv.sh  # 使用系统Python重新创建虚拟环境
+   ```
+
+2. **使用启动脚本**:
+   ```bash
+   cd backend
+   ./run_server.sh  # 自动检测并使用系统Python
+   ```
+
+3. **手动使用系统Python**:
+   ```bash
+   cd backend
+   ./run_with_system_python.sh
+   ```
 
 ### 3. 推理服务
 

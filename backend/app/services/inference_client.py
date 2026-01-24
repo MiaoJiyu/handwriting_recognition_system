@@ -1,3 +1,21 @@
+import os
+import ctypes
+
+# Fix for Nix Python library path issues
+# Preload libstdc++ to ensure it's available for gRPC
+libstdc_paths = [
+    '/lib/x86_64-linux-gnu/libstdc++.so.6',
+    '/usr/lib/x86_64-linux-gnu/libstdc++.so.6',
+    '/usr/lib/gcc/x86_64-linux-gnu/13/libstdc++.so'
+]
+for lib_path in libstdc_paths:
+    if os.path.exists(lib_path):
+        try:
+            ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
+            break
+        except OSError:
+            continue
+
 import grpc
 import asyncio
 from typing import List, Optional
