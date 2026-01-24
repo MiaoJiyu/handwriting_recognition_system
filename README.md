@@ -65,6 +65,7 @@ uvicorn app.main:app --reload
 ```bash
 cd inference_service
 pip install -r requirements.txt
+cp .env.example .env
 # 配置 .env 文件
 python grpc_server/server.py
 ```

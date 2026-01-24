@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package handwriting_inference;
+
+// 识别结果
+message RecognitionResult {
+    int32 user_id = 1;
+    string username = 2;
+    float score = 3;  // 相似度分数 0-1
+}
+
+// 识别请求
+message RecognizeRequest {
+    oneof image_source {
+        string image_path = 1;      // 图片路径
+        bytes image_data = 2;        // 图片二进制数据
+    }
+    int32 top_k = 3;                // 返回Top-K结果，默认5
+}
+
+// 识别响应
+message RecognizeResponse {
+    repeated RecognitionResult top_k = 1;  // Top-K结果
+    bool is_unknown = 2;                   // 是否为未知用户
+    float confidence = 3;                   // 置信度
+    string error_message = 4;               // 错误信息（如果有）
+}
+
+// 批量识别请求
+message BatchRecognizeRequest {
+    repeated string image_paths = 1;        // 图片路径列表
+    repeated bytes image_data = 2;          // 图片二进制数据列表
+    int32 top_k = 3;                       // 返回Top-K结果
+}
+
+// 批量识别响应
+message BatchRecognizeResponse {
+    repeated RecognizeResponse results = 1; // 每个图片的识别结果
+    string error_message = 2;               // 错误信息（如果有）
+}
+
+// 训练请求
+message TrainRequest {
+    int32 job_id = 1;                       // 训练任务ID
+    bool force_retrain = 2;                 // 是否强制重训练
+}
+
+// 训练响应
+message TrainResponse {
+    bool success = 1;                        // 是否成功
+    string message = 2;                     // 消息
+    int32 job_id = 3;                       // 训练任务ID
+}
+
+// 训练状态请求
+message TrainingStatusRequest {
+    int32 job_id = 1;                       // 训练任务ID
+}
+
+// 训练状态响应
+message TrainingStatusResponse {
+    string status = 1;                      // 状态: pending, running, completed, failed
+    float progress = 2;                     // 进度 0.0-1.0
+    int32 model_version_id = 3;             // 模型版本ID
+    string error_message = 4;               // 错误信息
+}
+
+// 配置更新请求
+message ConfigUpdateRequest {
+    float similarity_threshold = 1;          // 相似度阈值
+    float gap_threshold = 2;                 // 差距阈值
+    int32 top_k = 3;                        // Top-K值
+}
+
+// 配置更新响应
+message ConfigResponse {
+    bool success = 1;                        // 是否成功
+    string message = 2;                     // 消息
+}
+
+// 字迹识别服务
+service HandwritingInference {
+    // 单张图片识别
+    rpc Recognize(RecognizeRequest) returns (RecognizeResponse);
+    
+    // 批量识别
+    rpc BatchRecognize(BatchRecognizeRequest) returns (BatchRecognizeResponse);
+    
+    // 触发训练
+    rpc TrainModel(TrainRequest) returns (TrainResponse);
+    
+    // 获取训练状态
+    rpc GetTrainingStatus(TrainingStatusRequest) returns (TrainingStatusResponse);
+    
+    // 更新配置
+    rpc UpdateConfig(ConfigUpdateRequest) returns (ConfigResponse);
+}

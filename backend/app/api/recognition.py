@@ -44,19 +44,46 @@ async def recognize(
     
     try:
         client = InferenceClient()
-        result = RecognitionResult(
-            user_id=1,
-            username="test_user",
-            confidence=0.95,
-            is_unknown=False,
-            top_k=[{"user_id": 1, "username": "test_user", "score": 0.95}]
-        )
+        # 调用推理服务
+        try:
+            recognition_result = await client.recognize(temp_path)
+            
+            # 构建结果
+            top_k = recognition_result.get("top_k", [])
+            is_unknown = recognition_result.get("is_unknown", True)
+            confidence = recognition_result.get("confidence", 0.0)
+            
+            user_id = None
+            username = None
+            if top_k and not is_unknown:
+                user_id = top_k[0].get("user_id")
+                username = top_k[0].get("username")
+            
+            result = RecognitionResult(
+                user_id=user_id,
+                username=username,
+                confidence=confidence,
+                is_unknown=is_unknown,
+                top_k=top_k
+            )
+        except NotImplementedError:
+            # 如果gRPC未实现，返回模拟结果
+            result = RecognitionResult(
+                user_id=None,
+                username=None,
+                confidence=0.0,
+                is_unknown=True,
+                top_k=[]
+            )
         
+        # 保存识别日志
+        import json
         log = RecognitionLog(
             user_id=result.user_id,
-            result=result.top_k,
+            result=json.dumps(result.top_k, ensure_ascii=False),
             confidence=result.confidence,
-            is_unknown=result.is_unknown
+            is_unknown=result.is_unknown,
+            image_path=temp_path
         )
         db.add(log)
         db.commit()
