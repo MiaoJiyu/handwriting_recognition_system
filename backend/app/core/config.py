@@ -1,10 +1,17 @@
 from typing import List, Annotated
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import json
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+
     # 数据库配置
     DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/handwriting_recognition?charset=utf8mb4"
     
@@ -47,9 +54,6 @@ class Settings(BaseSettings):
         # If JSON parsing fails, treat as comma-separated string
         return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()

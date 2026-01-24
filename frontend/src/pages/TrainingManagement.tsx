@@ -10,14 +10,14 @@ const TrainingManagement: React.FC = () => {
   const { data: jobs, isLoading } = useQuery({
     queryKey: ['training-jobs'],
     queryFn: async () => {
-      const res = await api.get('/api/training');
+      const res = await api.get('/training');
       return res.data;
     },
   });
 
   const startTrainingMutation = useMutation({
     mutationFn: async () => {
-      await api.post('/api/training', { force_retrain: false });
+      await api.post('/training', { force_retrain: false });
     },
     onSuccess: () => {
       message.success('训练任务已启动');

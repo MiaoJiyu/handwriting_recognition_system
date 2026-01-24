@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -19,6 +19,7 @@ class SampleResponse(BaseModel):
     id: int
     user_id: int
     image_path: str
+    image_url: str
     original_filename: str
     status: str
     extracted_region_path: Optional[str]
@@ -51,6 +52,7 @@ class CropRequest(BaseModel):
 
 @router.post("/upload", response_model=SampleResponse, status_code=status.HTTP_201_CREATED)
 async def upload_sample(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -74,6 +76,9 @@ async def upload_sample(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
+    # 对外暴露的访问路径（与 main.py 的 app.mount("/uploads", ...) 对齐）
+    image_url = f"/uploads/samples/{filename}"
+
     # 创建样本记录
     sample = Sample(
         user_id=current_user.id,
@@ -84,12 +89,24 @@ async def upload_sample(
     db.add(sample)
     db.commit()
     db.refresh(sample)
-    
-    return sample
+
+    return SampleResponse(
+        id=sample.id,
+        user_id=sample.user_id,
+        image_path=sample.image_path,
+        image_url=str(request.base_url).rstrip('/') + image_url,
+        original_filename=sample.original_filename,
+        status=sample.status,
+        extracted_region_path=sample.extracted_region_path,
+        sample_metadata=getattr(sample, 'sample_metadata', None),
+        uploaded_at=sample.uploaded_at,
+        processed_at=getattr(sample, 'processed_at', None),
+    )
 
 
 @router.get("", response_model=List[SampleResponse])
 async def list_samples(
+    request: Request,
     user_id: Optional[int] = None,
     status: Optional[SampleStatus] = None,
     limit: int = 50,
@@ -109,11 +126,31 @@ async def list_samples(
         query = query.filter(Sample.status == status)
     
     samples = query.order_by(Sample.uploaded_at.desc()).limit(limit).all()
-    return samples
+
+    base = str(request.base_url).rstrip('/')
+    resp: List[SampleResponse] = []
+    for s in samples:
+        filename = os.path.basename(s.image_path)
+        resp.append(
+            SampleResponse(
+                id=s.id,
+                user_id=s.user_id,
+                image_path=s.image_path,
+                image_url=f"{base}/uploads/samples/{filename}",
+                original_filename=s.original_filename,
+                status=s.status,
+                extracted_region_path=s.extracted_region_path,
+                sample_metadata=getattr(s, 'sample_metadata', None),
+                uploaded_at=s.uploaded_at,
+                processed_at=getattr(s, 'processed_at', None),
+            )
+        )
+    return resp
 
 
 @router.get("/{sample_id}", response_model=SampleDetailResponse)
 async def get_sample(
+    request: Request,
     sample_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -133,7 +170,30 @@ async def get_sample(
             detail="无权查看其他用户的样本"
         )
     
-    return sample
+    base = str(request.base_url).rstrip('/')
+    filename = os.path.basename(sample.image_path)
+    return SampleDetailResponse(
+        id=sample.id,
+        user_id=sample.user_id,
+        image_path=sample.image_path,
+        image_url=f"{base}/uploads/samples/{filename}",
+        original_filename=sample.original_filename,
+        status=sample.status,
+        extracted_region_path=sample.extracted_region_path,
+        sample_metadata=getattr(sample, 'sample_metadata', None),
+        uploaded_at=sample.uploaded_at,
+        processed_at=getattr(sample, 'processed_at', None),
+        sample_regions=[
+            SampleRegionResponse(
+                id=r.id,
+                sample_id=r.sample_id,
+                bbox=r.bbox,
+                is_auto_detected=r.is_auto_detected,
+                created_at=r.created_at,
+            )
+            for r in getattr(sample, 'sample_regions', [])
+        ],
+    )
 
 
 @router.delete("/{sample_id}", status_code=status.HTTP_204_NO_CONTENT)

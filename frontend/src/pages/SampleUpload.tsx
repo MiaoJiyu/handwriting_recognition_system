@@ -14,7 +14,7 @@ const SampleUpload: React.FC = () => {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await api.post('/api/samples/upload', formData, {
+      const res = await api.post('/samples/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

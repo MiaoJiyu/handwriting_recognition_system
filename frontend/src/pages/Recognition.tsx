@@ -14,7 +14,7 @@ const Recognition: React.FC = () => {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await api.post('/api/recognition', formData, {
+      const res = await api.post('/recognition', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

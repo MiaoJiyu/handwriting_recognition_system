@@ -10,7 +10,7 @@ const Register: React.FC = () => {
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      await api.post('/api/auth/register', values);
+      await api.post('/auth/register', values);
       message.success('注册成功，请登录');
       navigate('/login');
     } catch (error: any) {

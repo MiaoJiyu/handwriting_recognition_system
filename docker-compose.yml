@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: handwriting_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-handwriting_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-handwriting_recognition}
+      MYSQL_USER: ${MYSQL_USER:-handwriting}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-handwriting_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - handwriting_net
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: handwriting_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - handwriting_net
+
+  # 后端API服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: handwriting_backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-handwriting}:${MYSQL_PASSWORD:-handwriting_password}@mysql:3306/${MYSQL_DATABASE:-handwriting_recognition}?charset=utf8mb4
+      - SECRET_KEY=${SECRET_KEY:-your-super-secret-key-change-in-production}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - INFERENCE_SERVICE_HOST=inference
+      - INFERENCE_SERVICE_PORT=50051
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - UPLOAD_DIR=/app/uploads
+      - SAMPLES_DIR=/app/uploads/samples
+      - MODELS_DIR=/app/models
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - uploads_data:/app/uploads
+      - models_data:/app/models
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - handwriting_net
+
+  # 推理服务
+  inference:
+    build:
+      context: ./inference_service
+      dockerfile: Dockerfile
+    container_name: handwriting_inference
+    restart: unless-stopped
+    environment:
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+      - MODEL_DIR=/app/models
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-handwriting}:${MYSQL_PASSWORD:-handwriting_password}@mysql:3306/${MYSQL_DATABASE:-handwriting_recognition}?charset=utf8mb4
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - SAMPLES_DIR=/app/uploads/samples
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.7}
+      - GAP_THRESHOLD=${GAP_THRESHOLD:-0.1}
+      - TOP_K=${TOP_K:-5}
+    ports:
+      - "${INFERENCE_PORT:-50051}:50051"
+    volumes:
+      - uploads_data:/app/uploads
+      - models_data:/app/models
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - handwriting_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+    container_name: handwriting_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - handwriting_net
+
+  # Nginx反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: handwriting_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - handwriting_net
+    profiles:
+      - production
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+  models_data:
+    driver: local
+
+networks:
+  handwriting_net:
+    driver: bridge

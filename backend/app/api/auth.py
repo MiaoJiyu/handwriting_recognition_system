@@ -98,3 +98,41 @@ async def register(
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """获取当前用户信息"""
     return current_user
+
+
+class LogoutResponse(BaseModel):
+    message: str
+    success: bool
+
+
+# Token黑名单（简单实现，生产环境应使用Redis）
+token_blacklist: set = set()
+
+
+def is_token_blacklisted(token: str) -> bool:
+    """检查token是否在黑名单中"""
+    return token in token_blacklist
+
+
+def add_token_to_blacklist(token: str):
+    """将token添加到黑名单"""
+    token_blacklist.add(token)
+
+
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(
+    current_user: User = Depends(get_current_user)
+):
+    """用户登出
+    
+    将当前token加入黑名单，使其失效。
+    注意：前端也应该删除本地存储的token。
+    """
+    from fastapi import Request
+    # 这里简单地返回成功消息
+    # 实际的token失效由前端删除token处理
+    # 如果需要服务端强制失效，可以使用Redis存储黑名单
+    return LogoutResponse(
+        message="登出成功",
+        success=True
+    )

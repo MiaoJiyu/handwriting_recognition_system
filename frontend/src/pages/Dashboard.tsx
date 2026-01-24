@@ -8,7 +8,7 @@ const Dashboard: React.FC = () => {
   const { data: samples } = useQuery({
     queryKey: ['samples', 'stats'],
     queryFn: async () => {
-      const res = await api.get('/api/samples?limit=1000');
+      const res = await api.get('/samples?limit=1000');
       return res.data;
     },
   });
@@ -16,7 +16,7 @@ const Dashboard: React.FC = () => {
   const { data: users } = useQuery({
     queryKey: ['users', 'stats'],
     queryFn: async () => {
-      const res = await api.get('/api/users');
+      const res = await api.get('/users');
       return res.data;
     },
   });

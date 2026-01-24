@@ -12,14 +12,14 @@ const UserManagement: React.FC = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const res = await api.get('/api/users');
+      const res = await api.get('/users');
       return res.data;
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (values: any) => {
-      await api.post('/api/users', values);
+      await api.post('/users', values);
     },
     onSuccess: () => {
       message.success('创建成功');

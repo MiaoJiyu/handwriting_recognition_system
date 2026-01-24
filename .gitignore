@@ -57,3 +57,7 @@ frontend/build/
 *.tmp
 *.temp
 .DS_Store
+
+# 开发计划
+plans/
+*.plan.md

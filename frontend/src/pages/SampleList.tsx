@@ -1,23 +1,58 @@
-import React from 'react';
-import { Table, Button, Image, Popconfirm, message } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Table, Button, Image, Popconfirm, message, Space, Card, Row, Col, Tag, Segmented, Tooltip } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined, ScissorOutlined, AppstoreOutlined, UnorderedListOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import ImageCropper from '../components/ImageCropper';
+
+// 辅助函数：将后端返回的 image_path 转换为可访问的 URL
+const getImageUrl = (imagePath: string | null): string => {
+  if (!imagePath) return '';
+  // 如果已经是完整 URL，直接返回
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // 从完整路径中提取文件名
+  const filename = imagePath.split('/').pop() || '';
+  // 构建可访问的 URL
+  return `/uploads/${filename}`;
+};
+
+interface Sample {
+  id: number;
+  user_id: number;
+  image_path: string;
+  image_url: string;
+  original_filename: string;
+  status: string;
+  extracted_region_path: string | null;
+  uploaded_at: string;
+}
+
+interface CropArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 const SampleList: React.FC = () => {
   const queryClient = useQueryClient();
+  const [viewMode, setViewMode] = useState<string | number>('list');
+  const [cropperVisible, setCropperVisible] = useState(false);
+  const [selectedSample, setSelectedSample] = useState<Sample | null>(null);
 
   const { data: samples, isLoading } = useQuery({
     queryKey: ['samples'],
     queryFn: async () => {
-      const res = await api.get('/api/samples');
+      const res = await api.get('/samples');
       return res.data;
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/api/samples/${id}`);
+      await api.delete(`/samples/${id}`);
     },
     onSuccess: () => {
       message.success('删除成功');
@@ -27,6 +62,43 @@ const SampleList: React.FC = () => {
       message.error(error.response?.data?.detail || '删除失败');
     },
   });
+
+  const cropMutation = useMutation({
+    mutationFn: async ({ sampleId, bbox }: { sampleId: number; bbox: CropArea }) => {
+      await api.post(`/samples/${sampleId}/crop`, { bbox });
+    },
+    onSuccess: () => {
+      message.success('裁剪区域已保存');
+      queryClient.invalidateQueries({ queryKey: ['samples'] });
+      setCropperVisible(false);
+      setSelectedSample(null);
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '裁剪失败');
+    },
+  });
+
+  const handleCrop = (sample: Sample) => {
+    setSelectedSample(sample);
+    setCropperVisible(true);
+  };
+
+  const handleCropConfirm = (cropArea: CropArea) => {
+    if (selectedSample) {
+      cropMutation.mutate({ sampleId: selectedSample.id, bbox: cropArea });
+    }
+  };
+
+  const getStatusTag = (status: string) => {
+    const statusMap: { [key: string]: { color: string; text: string } } = {
+      pending: { color: 'default', text: '待处理' },
+      processing: { color: 'processing', text: '处理中' },
+      processed: { color: 'success', text: '已处理' },
+      failed: { color: 'error', text: '处理失败' },
+    };
+    const config = statusMap[status] || { color: 'default', text: status };
+    return <Tag color={config.color}>{config.text}</Tag>;
+  };
 
   const columns = [
     {
@@ -40,9 +112,22 @@ const SampleList: React.FC = () => {
       dataIndex: 'image_path',
       key: 'preview',
       width: 150,
-      render: (path: string) => (
-        <Image src={path} width={100} height={100} style={{ objectFit: 'cover' }} alt="预览" />
-      ),
+      render: (_path: string, record: Sample) => {
+        const url = record.image_url || getImageUrl(record.image_path);
+        return (
+          <Image
+            src={url}
+            width={100}
+            height={100}
+            style={{ objectFit: 'cover' }}
+            alt="预览"
+            fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect width='100%25' height='100%25' fill='%23f5f5f5'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23999' font-size='12'%3EImage%20Error%3C/text%3E%3C/svg%3E"
+            onError={() => {
+              message.warning(`图片加载失败: ${url}`);
+            }}
+          />
+        );
+      },
     },
     {
       title: '文件名',
@@ -54,6 +139,7 @@ const SampleList: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
+      render: (status: string) => getStatusTag(status),
     },
     {
       title: '上传时间',
@@ -64,32 +150,122 @@ const SampleList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="确定要删除这个样本吗？"
-          onConfirm={() => deleteMutation.mutate(record.id)}
-          okText="确定"
-          cancelText="取消"
-        >
-          <Button danger icon={<DeleteOutlined />} size="small">
-            删除
+      width: 180,
+      render: (_: any, record: Sample) => (
+        <Space>
+          <Button
+            icon={<ScissorOutlined />}
+            size="small"
+            onClick={() => handleCrop(record)}
+          >
+            裁剪
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title="确定要删除这个样本吗？"
+            onConfirm={() => deleteMutation.mutate(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button danger icon={<DeleteOutlined />} size="small">
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
 
+  // 画廊视图
+  const renderGalleryView = () => (
+    <Row gutter={[16, 16]}>
+      {samples?.map((sample: Sample) => (
+        <Col key={sample.id} xs={24} sm={12} md={8} lg={6} xl={4}>
+          <Card
+            hoverable
+            cover={
+              <div style={{ height: 200, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>
+                <Image
+                  src={sample.image_url || getImageUrl(sample.image_path)}
+                  alt={sample.original_filename}
+                  style={{ maxWidth: '100%', maxHeight: 200, objectFit: 'contain' }}
+                  preview={{ mask: '查看大图' }}
+                />
+              </div>
+            }
+            actions={[
+              <ScissorOutlined key="crop" onClick={() => handleCrop(sample)} title="裁剪" />,
+              <Popconfirm
+                key="delete"
+                title="确定要删除这个样本吗？"
+                onConfirm={() => deleteMutation.mutate(sample.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <DeleteOutlined style={{ color: '#ff4d4f' }} title="删除" />
+              </Popconfirm>,
+            ]}
+          >
+            <Card.Meta
+              title={
+                <span style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                  {sample.original_filename.length > 20
+                    ? sample.original_filename.substring(0, 20) + '...'
+                    : sample.original_filename}
+                </span>
+              }
+              description={
+                <div style={{ fontSize: 12 }}>
+                  {getStatusTag(sample.status)}
+                  <div style={{ marginTop: 4, color: '#999' }}>
+                    {new Date(sample.uploaded_at).toLocaleDateString()}
+                  </div>
+                </div>
+              }
+            />
+          </Card>
+        </Col>
+      ))}
+    </Row>
+  );
+
   return (
     <div>
-      <h1>样本管理</h1>
-      <Table
-        columns={columns}
-        dataSource={samples}
-        loading={isLoading}
-        rowKey="id"
-        pagination={{ pageSize: 10 }}
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 style={{ margin: 0 }}>样本管理</h1>
+        <Segmented
+          options={[
+            { value: 'list', icon: <UnorderedListOutlined />, label: '列表' },
+            { value: 'gallery', icon: <AppstoreOutlined />, label: '画廊' },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+        />
+      </div>
+      
+      {viewMode === 'list' ? (
+        <Table
+          columns={columns}
+          dataSource={samples}
+          loading={isLoading}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+        />
+      ) : (
+        renderGalleryView()
+      )}
+
+      {selectedSample && (
+        <ImageCropper
+          visible={cropperVisible}
+          imageUrl={selectedSample.image_url || getImageUrl(selectedSample.image_path)}
+          onCrop={handleCropConfirm}
+          onCancel={() => {
+            setCropperVisible(false);
+            setSelectedSample(null);
+          }}
+          title={`裁剪图片 - ${selectedSample.original_filename}`}
+        />
+      )}
     </div>
   );
 };
