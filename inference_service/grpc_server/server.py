@@ -215,14 +215,26 @@ async def serve():
     handwriting_inference_pb2_grpc.add_HandwritingInferenceServicer_to_server(
         HandwritingInferenceServicer(), server
     )
-    
+
     listen_addr = f"{settings.GRPC_HOST}:{settings.GRPC_PORT}"
     server.add_insecure_port(listen_addr)
-    
+
     logger.info(f"gRPC服务器启动在 {listen_addr}")
     await server.start()
-    await server.wait_for_termination()
+
+    try:
+        await server.wait_for_termination()
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        pass
+    finally:
+        try:
+            await server.stop(grace=3)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
-    asyncio.run(serve())
+    try:
+        asyncio.run(serve())
+    except KeyboardInterrupt:
+        pass
