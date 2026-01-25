@@ -4,6 +4,7 @@ from .sample import Sample, SampleStatus, SampleRegion
 from .recognition_log import RecognitionLog
 from .training_job import TrainingJob, TrainingJobStatus
 from .model import Model
+from .user_feature import UserFeature
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "TrainingJob",
     "TrainingJobStatus",
     "Model",
+    "UserFeature",
 ]
