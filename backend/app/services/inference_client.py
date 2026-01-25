@@ -21,8 +21,15 @@ import asyncio
 from typing import List, Optional
 from ..core.config import settings
 
-# 复用 inference_service 侧已存在的（占位版）pb2/pb2_grpc，以便快速对接 localhost:50051。
-# 注意：该 pb2 文件并非 protoc 生成的标准实现，但在当前仓库内服务端/客户端可保持一致。
+# 复用仓库根目录 inference_service 侧已存在的 pb2/pb2_grpc。
+# 注意：当从 backend 目录运行（例如 uvicorn --reload）时，项目根目录不一定在 sys.path 中，
+# 因此这里显式把仓库根目录加入 sys.path，确保可 import inference_service。
+import sys
+
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from inference_service.grpc_server import handwriting_inference_pb2 as pb2
 from inference_service.grpc_server import handwriting_inference_pb2_grpc as pb2_grpc
 
