@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Table, Button, message, Card } from 'antd';
+import React from 'react';
+import { Table, Button, message, Card, Tag, Tooltip } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { PlayCircleOutlined } from '@ant-design/icons';
@@ -23,8 +23,9 @@ const TrainingManagement: React.FC = () => {
       message.success('训练任务已启动');
       queryClient.invalidateQueries({ queryKey: ['training-jobs'] });
     },
-    onError: () => {
-      message.error('启动训练失败');
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      message.error(detail ? `启动训练失败：${detail}` : '启动训练失败');
     },
   });
 
@@ -38,6 +39,17 @@ const TrainingManagement: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      render: (status: string) => {
+        let color = 'geekblue';
+        if (status === 'completed') {
+          color = 'green';
+        } else if (status === 'failed') {
+          color = 'volcano';
+        } else if (status === 'running') {
+          color = 'processing';
+        }
+        return <Tag color={color}>{status.toUpperCase()}</Tag>;
+      },
     },
     {
       title: '进度',
@@ -50,6 +62,12 @@ const TrainingManagement: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (text: string) => new Date(text).toLocaleString(),
+    },
+    {
+      title: '详情',
+      dataIndex: 'error_message',
+      key: 'error_message',
+      render: (text: string) => text ? <Tooltip title={text}>{text.substring(0, 50)}...</Tooltip> : '-',
     },
   ];
 

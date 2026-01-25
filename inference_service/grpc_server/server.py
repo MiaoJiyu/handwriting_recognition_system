@@ -19,14 +19,17 @@ for lib_path in libstdc_paths:
 import asyncio
 import grpc
 from concurrent import futures
-from grpc_server import handwriting_inference_pb2, handwriting_inference_pb2_grpc
-from core.config import settings
-from inference.recognizer import Recognizer
-from training.trainer import Trainer
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+from grpc_server import handwriting_inference_pb2, handwriting_inference_pb2_grpc
+from core.config import settings
+from inference.recognizer import Recognizer
+from training.trainer import Trainer
+
+logger.info(f"Inference service DATABASE_URL: {getattr(settings, 'DATABASE_URL', None)}")
 
 
 class HandwritingInferenceServicer(handwriting_inference_pb2_grpc.HandwritingInferenceServicer):
@@ -146,10 +149,18 @@ class HandwritingInferenceServicer(handwriting_inference_pb2_grpc.HandwritingInf
         try:
             job_id = request.job_id
             force_retrain = request.force_retrain
-            
-            # 异步启动训练任务
-            asyncio.create_task(self.trainer.train(job_id, force_retrain))
-            
+
+            # 异步启动训练任务，并确保异常被捕获，否则会出现 "Task exception was never retrieved"
+            task = asyncio.create_task(self.trainer.train(job_id, force_retrain))
+
+            def _log_task_result(t: asyncio.Task):
+                try:
+                    t.result()
+                except Exception as e:
+                    logger.error(f"训练任务异常 (job_id={job_id}): {str(e)}")
+
+            task.add_done_callback(_log_task_result)
+
             return handwriting_inference_pb2.TrainResponse(
                 success=True,
                 message="训练任务已启动",

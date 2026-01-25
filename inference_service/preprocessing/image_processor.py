@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 from typing import Tuple, Optional, Dict
 import os
+import urllib.request
+from urllib.parse import urljoin
+from core.config import settings
 from .segmentation import Segmentation
 from .enhancement import Enhancement
 
@@ -16,15 +19,38 @@ class ImageProcessor:
         self.enhancement = Enhancement()
     
     def load_image(self, image_path: str) -> np.ndarray:
-        """加载图片"""
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"图片文件不存在: {image_path}")
+        """加载图片
         
-        image = cv2.imread(image_path)
-        if image is None:
-            raise ValueError(f"无法读取图片: {image_path}")
-        
-        return image
+        训练/推理阶段优先读取本地文件；如果路径是后端 uploads 的相对路径（例如 ./uploads/... 或 /uploads/...），
+        则通过 settings.BACKEND_ORIGIN 从后端 HTTP 拉取。
+        """
+        # 1) 本地绝对/相对路径存在则直接读取
+        if os.path.exists(image_path):
+            image = cv2.imread(image_path)
+            if image is None:
+                raise ValueError(f"无法读取图片: {image_path}")
+            return image
+
+        # 2) 处理后端上传目录相对路径：./uploads/... 或 uploads/... 或 /uploads/...
+        normalized = image_path.strip()
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if normalized.startswith("uploads/"):
+            normalized = "/" + normalized
+        if normalized.startswith("/uploads/"):
+            url = urljoin(settings.BACKEND_ORIGIN.rstrip("/") + "/", normalized.lstrip("/"))
+            try:
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    data = resp.read()
+                arr = np.frombuffer(data, dtype=np.uint8)
+                image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if image is None:
+                    raise ValueError(f"无法解码图片: {url}")
+                return image
+            except Exception as e:
+                raise FileNotFoundError(f"图片文件不存在且HTTP拉取失败: path={image_path}, url={url}, err={e}")
+
+        raise FileNotFoundError(f"图片文件不存在: {image_path}")
     
     def crop_region(self, image: np.ndarray, bbox: Dict) -> np.ndarray:
         """裁剪指定区域"""

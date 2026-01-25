@@ -250,7 +250,12 @@ async def crop_sample_region(
         is_auto_detected=0  # 手动标注
     )
     db.add(region)
+
+    # 裁剪/标注完成后，将样本标记为已处理，供训练服务读取
+    sample.status = SampleStatus.PROCESSED
+    sample.processed_at = datetime.utcnow()
+
     db.commit()
     db.refresh(region)
-    
+
     return region

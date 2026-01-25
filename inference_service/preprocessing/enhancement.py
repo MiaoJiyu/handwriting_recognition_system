@@ -56,8 +56,14 @@ class Enhancement:
             return image, 0.0
         
         # 计算平均角度
+        # OpenCV 的 HoughLines 返回形状通常为 (N, 1, 2)；这里做兼容展开
         angles = []
-        for rho, theta in lines[:20]:  # 只取前20条线
+        for line in lines[:20]:  # 只取前20条线
+            try:
+                rho, theta = line[0]
+            except Exception:
+                # 兜底：如果形状异常则跳过该条线
+                continue
             angle = np.degrees(theta) - 90
             if -45 < angle < 45:
                 angles.append(angle)

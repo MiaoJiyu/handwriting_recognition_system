@@ -137,14 +137,23 @@ class Trainer:
             
             # 负样本（不同用户的样本）
             negative_users = [uid for uid in user_ids if uid != user_id]
+            if not negative_users:
+                # 只有一个用户时无法构造负样本
+                continue
             
             for i, anchor in enumerate(user_sample_list):
                 # 随机选择一个正样本
-                positive = np.random.choice([s for s in user_sample_list if s != anchor])
+                positives = [s for s in user_sample_list if s != anchor]
+                if not positives:
+                    continue
+                positive = np.random.choice(positives)
                 
                 # 随机选择一个负样本
                 negative_user_id = np.random.choice(negative_users)
-                negative = np.random.choice(user_samples[negative_user_id])
+                negative_candidates = user_samples.get(negative_user_id) or []
+                if not negative_candidates:
+                    continue
+                negative = np.random.choice(negative_candidates)
                 
                 triplets.append((anchor, positive, negative))
         
@@ -185,7 +194,7 @@ class Trainer:
             # 创建Triplet数据集
             triplets = self._create_triplets(samples)
             if len(triplets) == 0:
-                raise ValueError("无法创建有效的Triplet样本对")
+                raise ValueError("无法创建有效的Triplet样本对（需要至少2个用户且每个用户>=2个样本）")
             
             # 数据加载器
             dataset = HandwritingDataset(samples, self.image_processor)
