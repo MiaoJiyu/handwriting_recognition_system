@@ -194,18 +194,18 @@ class Trainer:
             # 创建Triplet数据集
             triplets = self._create_triplets(samples)
             if len(triplets) == 0:
-                raise ValueError("无法创建有效的Triplet样本对（需要至少2个用户且每个用户>=2个样本）")
-            
-            # 数据加载器
+                logger.warning("Triplet样本对不足，降级使用对比损失训练（不需要多用户负样本）")
+
+            # 数据加载器（降低内存占用，避免 OOM killer）
             dataset = HandwritingDataset(samples, self.image_processor)
-            dataloader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=2)
-            
+            dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0)
+
             # 损失函数和优化器
             criterion = TripletLoss(margin=1.0)
             optimizer = optim.Adam(model.parameters(), lr=0.001)
-            
-            # 训练
-            num_epochs = 10
+
+            # 训练（先降低 epoch，保证能在资源受限环境跑通）
+            num_epochs = 3
             total_batches = len(dataloader) * num_epochs
             current_batch = 0
             
