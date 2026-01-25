@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from .core.config import settings
+import os
 from .api import (
     auth_router,
     users_router,
@@ -75,6 +76,8 @@ class CORSStaticFiles(StaticFiles):
         return response
 
 # 让浏览器可以通过 /uploads/... 访问到 settings.UPLOAD_DIR 下的文件
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(settings.SAMPLES_DIR, exist_ok=True)
 app.mount("/uploads", CORSStaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # 注册路由
