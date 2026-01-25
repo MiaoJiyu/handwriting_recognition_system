@@ -334,6 +334,59 @@ frontend/vite.config.ts 中 target 为您的后端地址（如果您需要在广
 
 ---
 
+## 推荐服务器配置（部署建议）
+
+本项目包含 **FastAPI 后端 + 推理服务（PyTorch + OpenCV + gRPC）+ MySQL + Redis + 前端静态站点**。
+其中最吃资源的是 **推理服务（深度模型推理）**，因此服务器配置主要取决于是否使用 GPU、以及预期并发量。
+
+### 1) 入门 / 开发 / 小规模试运行（CPU 推理）
+
+适合：内网试用、并发很低（<5 QPS）、对时延要求不极致。
+
+- **CPU**：8 核（x86_64）
+- **内存**：16–32 GB（建议 32GB）
+- **磁盘**：200GB SSD（镜像/上传样本/模型/日志）
+- **GPU**：不需要
+- **系统**：Ubuntu 22.04 LTS（推荐）
+
+部署方式建议：
+- 单机 Docker Compose 跑全套（MySQL/Redis/backend/inference/frontend/nginx）
+
+### 2) 推荐生产（GPU 推理，中小规模）
+
+适合：需要较好的识别速度、并发中等（5–50 QPS，视模型复杂度而定）。
+
+- **CPU**：16 核
+- **内存**：64 GB
+- **磁盘**：500GB–1TB NVMe SSD
+- **GPU**：1 张 NVIDIA（建议 **>= 16GB 显存**）
+  - 常见选择：T4 16GB、A10 24GB、L4 24GB、A4000/A5000 等
+- **网络**：千兆网卡
+
+部署方式建议：
+- 推理服务单独部署到 GPU 机器
+- 后端 + MySQL + Redis 可同机或拆分（根据数据量/并发）
+- 前端静态文件由 Nginx 托管
+
+### 3) 可扩展生产（高并发 / 高可用）
+
+适合：并发较高、需要横向扩容与稳定性。
+
+- **API（FastAPI）**：2 台起（或 K8s 多副本），每台 8–16 核 / 16–32GB
+- **推理服务**：多台 GPU 服务器（按吞吐扩容）
+- **MySQL**：建议单独机器（主从/高可用），16 核 / 64GB / NVMe
+- **Redis**：建议单独机器或哨兵/集群
+- **对象存储**：建议将 `uploads/` 放 OSS/S3/MinIO，避免本地盘扩容困难
+- **负载均衡**：Nginx/Ingress + 健康检查
+
+### 关键注意事项
+
+- **推理服务依赖较重**：PyTorch/OpenCV/PaddleOCR 建议容器化并固定版本。
+- **模型与特征库**：
+  - 模型权重：`inference_service/models/`（无 `.pth` 时会尝试使用 ImageNet 预训练作为兜底）。
+  - 特征库：推理服务会从 DB 表 `user_features` 读取用户特征向量（没有特征库将无法返回有效 Top-K）。
+- **GPU 部署**：Docker 场景需要安装 NVIDIA 驱动与 nvidia-container-toolkit。
+
 ## Docker部署
 
 ### 快速启动（开发环境）
