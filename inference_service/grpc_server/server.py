@@ -1,5 +1,9 @@
 import os
+import sys
 import ctypes
+
+# Add inference_service directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Fix for Nix Python library path issues
 # Preload libstdc++ to ensure it's available for gRPC
@@ -21,9 +25,14 @@ import grpc
 from concurrent import futures
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
+# Import protobuf modules from local grpc_server package
 from grpc_server import handwriting_inference_pb2, handwriting_inference_pb2_grpc
 from core.config import settings
 from inference.recognizer import Recognizer
@@ -205,7 +214,7 @@ class HandwritingInferenceServicer(handwriting_inference_pb2_grpc.HandwritingInf
                 settings.GAP_THRESHOLD = request.gap_threshold
             if request.top_k > 0:
                 settings.TOP_K = request.top_k
-            
+
             return handwriting_inference_pb2.ConfigResponse(
                 success=True,
                 message="配置已更新"
@@ -217,6 +226,82 @@ class HandwritingInferenceServicer(handwriting_inference_pb2_grpc.HandwritingInf
             return handwriting_inference_pb2.ConfigResponse(
                 success=False,
                 message=str(e)
+            )
+
+    async def UpdateUserFeaturesIncremental(self, request, context):
+        """增量更新用户特征"""
+        try:
+            user_id = request.user_id
+            image_paths = list(request.image_paths)
+            use_existing_pca = request.use_existing_pca
+
+            # 查询这些样本的详细信息
+            from sqlalchemy import create_engine, text
+            engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+
+            with engine.connect() as conn:
+                placeholders = ', '.join([':path' + str(i) for i in range(len(image_paths))])
+                params = {f'path{i}': path for i, path in enumerate(image_paths)}
+
+                result = conn.execute(text(f"""
+                    SELECT s.id, s.user_id, s.image_path, s.extracted_region_path,
+                           sr.bbox
+                    FROM samples s
+                    LEFT JOIN sample_regions sr ON s.id = sr.sample_id
+                    WHERE s.image_path IN ({placeholders})
+                      AND s.status = 'PROCESSED'
+                      AND s.user_id = :user_id
+                """), {**params, 'user_id': user_id})
+
+                new_samples = []
+                for row in result:
+                    annotation_data = None
+                    if row[4]:  # bbox
+                        import json
+                        annotation_data = {"bbox": json.loads(row[4])}
+
+                    new_samples.append({
+                        "id": row[0],
+                        "user_id": row[1],
+                        "image_path": row[2],
+                        "extracted_region_path": row[3],
+                        "annotation_data": annotation_data,
+                        "separation_mode": "auto"
+                    })
+
+            # 调用增量特征更新
+            success = await self.trainer.update_user_features_incremental(
+                new_samples,
+                user_id,
+                use_existing_pca
+            )
+
+            if success:
+                return handwriting_inference_pb2.IncrementalFeatureUpdateResponse(
+                    success=True,
+                    message=f"用户 {user_id} 的特征已增量更新",
+                    user_id=user_id,
+                    updated_sample_count=len(new_samples)
+                )
+            else:
+                context.set_code(grpc.StatusCode.INTERNAL)
+                context.set_details("增量更新失败")
+                return handwriting_inference_pb2.IncrementalFeatureUpdateResponse(
+                    success=False,
+                    message="增量更新失败",
+                    user_id=user_id,
+                    updated_sample_count=0
+                )
+
+        except Exception as e:
+            logger.error(f"增量更新用户特征失败: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return handwriting_inference_pb2.IncrementalFeatureUpdateResponse(
+                success=False,
+                message=str(e),
+                user_id=request.user_id,
+                updated_sample_count=0
             )
 
 

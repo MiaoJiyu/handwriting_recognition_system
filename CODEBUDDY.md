@@ -95,7 +95,7 @@ cd frontend
 npm install
 
 # Start development server
-npm run dev
+npm run dev -- --host 0.0.0.0
 
 # Build for production
 npm run build

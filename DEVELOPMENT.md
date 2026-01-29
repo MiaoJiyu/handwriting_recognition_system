@@ -243,7 +243,8 @@ pip install -r requirements.txt
 alembic upgrade head
 
 # 启动服务（开发模式）
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+#uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+./run_server.sh
 ```
 
 **常见问题解决：**
@@ -275,7 +276,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
 # 启动gRPC服务
-python -m grpc_server.server
+./run_server.sh
 ```
 
 **GPU支持：**

@@ -78,20 +78,38 @@ message ConfigResponse {
     string message = 2;                     // 消息
 }
 
+// 增量特征更新请求
+message IncrementalFeatureUpdateRequest {
+    int32 user_id = 1;                     // 用户ID
+    repeated string image_paths = 2;         // 新样本图片路径列表
+    bool use_existing_pca = 3;              // 是否使用已拟合的PCA
+}
+
+// 增量特征更新响应
+message IncrementalFeatureUpdateResponse {
+    bool success = 1;                        // 是否成功
+    string message = 2;                     // 消息
+    int32 user_id = 3;                     // 用户ID
+    int32 updated_sample_count = 4;          // 更新的样本数量
+}
+
 // 字迹识别服务
 service HandwritingInference {
     // 单张图片识别
     rpc Recognize(RecognizeRequest) returns (RecognizeResponse);
-    
+
     // 批量识别
     rpc BatchRecognize(BatchRecognizeRequest) returns (BatchRecognizeResponse);
-    
+
     // 触发训练
     rpc TrainModel(TrainRequest) returns (TrainResponse);
-    
+
     // 获取训练状态
     rpc GetTrainingStatus(TrainingStatusRequest) returns (TrainingStatusResponse);
-    
+
     // 更新配置
     rpc UpdateConfig(ConfigUpdateRequest) returns (ConfigResponse);
+
+    // 增量特征更新
+    rpc UpdateUserFeaturesIncremental(IncrementalFeatureUpdateRequest) returns (IncrementalFeatureUpdateResponse);
 }

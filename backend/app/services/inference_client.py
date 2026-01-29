@@ -23,12 +23,15 @@ from ..core.config import settings
 
 # 复用仓库根目录 inference_service 侧已存在的 pb2/pb2_grpc。
 # 注意：当从 backend 目录运行（例如 uvicorn --reload）时，项目根目录不一定在 sys.path 中，
-# 因此这里显式把仓库根目录加入 sys.path，确保可 import inference_service。
+# 因此这里显式把仓库根目录和 grpc_server 目录加入 sys.path，确保可 import inference_service。
 import sys
 
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+_grpc_server_dir = os.path.join(_repo_root, "inference_service", "grpc_server")
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
+if _grpc_server_dir not in sys.path:
+    sys.path.insert(0, _grpc_server_dir)
 
 from inference_service.grpc_server import handwriting_inference_pb2 as pb2
 from inference_service.grpc_server import handwriting_inference_pb2_grpc as pb2_grpc

@@ -167,30 +167,30 @@ class Trainer:
                 "progress": 0.0,
                 "error_message": None
             }
-            
+
             # 加载样本
             samples = self._load_samples_from_db()
             if len(samples) < 3:
                 raise ValueError("样本数量不足，至少需要3个样本")
-            
-            # 决定训练策略
+
+            # 检查是否有已存在的训练模型
+            existing_model = self.model_manager.load_model()
             total_samples = len(samples)
-            # 这里应该从数据库获取已有样本数，暂时假设
-            existing_samples = 0
-            
-            if force_retrain or (total_samples - existing_samples) >= total_samples * 0.1:
+
+            # 决定训练策略
+            if force_retrain or existing_model is None:
                 # 全量重训练
                 logger.info("执行全量重训练")
                 model = SiameseNetwork()
             else:
                 # 增量训练（微调）
                 logger.info("执行增量训练（微调）")
-                model = self.model_manager.load_model()
-            
+                model = existing_model
+
             model.train()
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model.to(device)
-            
+
             # 创建Triplet数据集
             triplets = self._create_triplets(samples)
             if len(triplets) == 0:
@@ -202,50 +202,53 @@ class Trainer:
 
             # 损失函数和优化器
             criterion = TripletLoss(margin=1.0)
-            optimizer = optim.Adam(model.parameters(), lr=0.001)
+            optimizer = optim.Adam(model.parameters(), lr=0.001 if force_retrain else 0.0001)  # 增量训练使用更小的学习率
 
             # 训练（先降低 epoch，保证能在资源受限环境跑通）
             num_epochs = 3
             total_batches = len(dataloader) * num_epochs
             current_batch = 0
-            
+
             for epoch in range(num_epochs):
                 for batch_idx, (images, user_ids) in enumerate(dataloader):
                     images = images.to(device)
-                    
+
                     # 创建triplet batch
                     # 这里简化处理，实际应该从batch中构造triplet
                     anchor_features = model.forward_one(images)
-                    
+
                     # 计算损失（简化版，实际需要构造triplet）
                     # 这里使用对比损失作为简化
                     loss = self._compute_contrastive_loss(anchor_features, user_ids, model, device)
-                    
+
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-                    
+
                     current_batch += 1
                     progress = current_batch / total_batches
                     self.training_status[job_id]["progress"] = progress
-                    
+
                     if batch_idx % 10 == 0:
                         logger.info(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
-            
+
             # 保存模型
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Use a smaller integer for model_version_id (timestamp in seconds)
+            import time
+            model_version_id = int(time.time())
             self.model_manager.save_model(model, version)
-            
+
             # 提取所有用户特征并更新特征库
             await self._update_user_features(samples, version)
-            
+
             self.training_status[job_id] = {
                 "status": "completed",
                 "progress": 1.0,
                 "error_message": None,
-                "model_version_id": version
+                "model_version_id": model_version_id
             }
-            
+
         except Exception as e:
             logger.error(f"训练失败: {str(e)}")
             self.training_status[job_id] = {
@@ -256,10 +259,46 @@ class Trainer:
             raise
     
     def _compute_contrastive_loss(self, features, user_ids, model, device):
-        """计算对比损失（简化版）"""
-        # 这里应该实现真正的triplet loss
-        # 暂时返回一个简单的损失
-        return torch.mean(torch.sum(features ** 2, dim=1))
+        """计算对比损失（改进版）"""
+        # 将 features 和 user_ids 移动到同一个设备
+        features = features.to(device)
+        user_ids = user_ids.to(device)
+
+        # 计算所有样本对之间的距离
+        n = features.size(0)
+        if n < 2:
+            return torch.tensor(0.0, device=device)
+
+        # 计算所有样本对之间的欧氏距离矩阵
+        dist_matrix = torch.cdist(features, features)
+
+        # 创建标签矩阵：如果两个样本是同一用户，则为1，否则为0
+        labels = user_ids.unsqueeze(1) == user_ids.unsqueeze(0)
+
+        # 计算正样本对距离和负样本对距离
+        mask_positive = labels.float()
+        mask_negative = (~labels).float()
+
+        # 避免自比较（对角线）
+        mask = torch.eye(n, device=device).bool()
+        mask_positive[mask] = 0
+        mask_negative[mask] = 0
+
+        # 正样本对距离（同一用户的不同样本）
+        pos_dist = (dist_matrix * mask_positive).sum() / (mask_positive.sum() + 1e-7)
+
+        # 负样本对距离（不同用户的样本）
+        neg_dist = (dist_matrix * mask_negative).sum() / (mask_negative.sum() + 1e-7)
+
+        # Contrastive loss: L = (1-y) * 0.5 * d^2 + y * 0.5 * max(0, margin - d)^2
+        margin = 1.0
+        loss = (1 - mask_positive) * 0.5 * dist_matrix ** 2 + \
+                mask_positive * 0.5 * torch.clamp(margin - dist_matrix, min=0) ** 2
+
+        # 移除对角线（自比较）
+        loss = loss * ~torch.eye(n, device=device).bool()
+
+        return loss.mean()
     
     async def _update_user_features(self, samples: List[Dict], model_version: str):
         """更新用户特征库"""
@@ -270,13 +309,14 @@ class Trainer:
             from core.config import settings
             from feature_extraction.feature_fusion import FeatureFusion
             import json
-            
+
             engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
             SessionLocal = sessionmaker(bind=engine)
             db = SessionLocal()
-            
+
+            # FeatureFusion 在循环外创建，避免PCA状态冲突
             feature_fusion = FeatureFusion()
-            
+
             # 按用户分组样本
             user_samples = {}
             for sample in samples:
@@ -284,23 +324,29 @@ class Trainer:
                 if user_id not in user_samples:
                     user_samples[user_id] = []
                 user_samples[user_id].append(sample)
-            
+
             # 为每个用户提取并更新特征
             for user_id, user_sample_list in user_samples.items():
                 try:
-                    # 提取所有样本的特征
-                    features_list = []
+                    # 批量预处理该用户的所有样本
+                    processed_images = []
                     for sample in user_sample_list:
                         processed_image, _ = self.image_processor.process_sample(
                             sample["image_path"],
                             separation_mode=sample.get("separation_mode", "auto"),
                             annotation=sample.get("annotation_data")
                         )
-                        features = feature_fusion.extract_fused_features(processed_image)
-                        features_list.append(features)
-                    
+                        processed_images.append(processed_image)
+
+                    # 批量提取特征（一次性传入所有样本，解决PCA单样本问题）
+                    features_list = feature_fusion.extract_fused_features(processed_images)
+
                     # 计算平均特征
                     if len(features_list) > 0:
+                        # 确保是2D数组
+                        if len(features_list.shape) == 1:
+                            features_list = features_list.reshape(1, -1)
+
                         avg_features = np.mean(features_list, axis=0)
                         feature_vector_str = json.dumps(avg_features.tolist())
                         sample_ids_str = json.dumps([s["id"] for s in user_sample_list])
@@ -358,3 +404,138 @@ class Trainer:
             "progress": 0.0,
             "error_message": None
         })
+
+    async def update_user_features_incremental(
+        self,
+        new_samples: List[Dict],
+        user_id: int,
+        use_existing_pca: bool = True
+    ) -> bool:
+        """
+        增量更新用户特征（无需重新训练整个模型）
+
+        Args:
+            new_samples: 新上传的样本列表
+            user_id: 要更新的用户ID
+            use_existing_pca: 是否使用已拟合的PCA（推荐True）
+
+        Returns:
+            是否更新成功
+        """
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import text
+            from core.config import settings
+            from feature_extraction.feature_fusion import FeatureFusion
+            import json
+
+            engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+            SessionLocal = sessionmaker(bind=engine)
+            db = SessionLocal()
+
+            # 加载现有特征
+            existing_result = db.execute(
+                text("SELECT feature_vector, sample_ids FROM user_features WHERE user_id = :user_id"),
+                {"user_id": user_id}
+            ).first()
+
+            if existing_result:
+                # 如果已有特征，计算加权平均
+                try:
+                    old_features = np.array(json.loads(existing_result[0]))
+                    old_sample_ids = json.loads(existing_result[1])
+                except Exception as e:
+                    logger.warning(f"解析用户 {user_id} 的现有特征失败: {str(e)}，将重新计算")
+                    old_features = None
+                    old_sample_ids = []
+            else:
+                old_features = None
+                old_sample_ids = []
+
+            # 提取新样本的特征
+            processed_images = []
+            for sample in new_samples:
+                processed_image, _ = self.image_processor.process_sample(
+                    sample["image_path"],
+                    separation_mode=sample.get("separation_mode", "auto"),
+                    annotation=sample.get("annotation_data")
+                )
+                processed_images.append(processed_image)
+
+            # 使用FeatureFusion提取特征
+            feature_fusion = FeatureFusion()
+
+            # 如果使用已拟合的PCA，确保不会重新拟合
+            if use_existing_pca and not feature_fusion._pca_fitted:
+                logger.warning(f"PCA未拟合，增量更新时将跳过PCA降维")
+                feature_fusion.use_pca = False
+
+            new_features_list = feature_fusion.extract_fused_features(processed_images)
+
+            # 计算新特征的平均
+            if len(new_features_list.shape) == 1:
+                new_features_list = new_features_list.reshape(1, -1)
+
+            new_avg_features = np.mean(new_features_list, axis=0)
+
+            # 合并新旧特征（加权平均）
+            if old_features is not None:
+                # 权重：旧特征权重高（基于样本数量）
+                old_weight = len(old_sample_ids)
+                new_weight = len(new_samples)
+                total_weight = old_weight + new_weight
+
+                # 加权平均
+                merged_features = (old_features * old_weight + new_avg_features * new_weight) / total_weight
+
+                # 合并样本ID
+                all_sample_ids = old_sample_ids + [s["id"] for s in new_samples]
+            else:
+                merged_features = new_avg_features
+                all_sample_ids = [s["id"] for s in new_samples]
+
+            # 更新数据库
+            feature_vector_str = json.dumps(merged_features.tolist())
+            sample_ids_str = json.dumps(all_sample_ids)
+
+            if existing_result:
+                db.execute(
+                    text("""
+                        UPDATE user_features
+                        SET feature_vector = :feature_vector,
+                            sample_ids = :sample_ids,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id
+                    """),
+                    {
+                        "user_id": user_id,
+                        "feature_vector": feature_vector_str,
+                        "sample_ids": sample_ids_str
+                    }
+                )
+            else:
+                db.execute(
+                    text("""
+                        INSERT INTO user_features (user_id, feature_vector, sample_ids)
+                        VALUES (:user_id, :feature_vector, :sample_ids)
+                    """),
+                    {
+                        "user_id": user_id,
+                        "feature_vector": feature_vector_str,
+                        "sample_ids": sample_ids_str
+                    }
+                )
+
+            db.commit()
+            db.close()
+
+            logger.info(f"用户 {user_id} 的特征已增量更新（旧样本: {len(old_sample_ids)}, 新样本: {len(new_samples)}）")
+            return True
+
+        except Exception as e:
+            logger.error(f"增量更新用户 {user_id} 的特征失败: {str(e)}")
+            if 'db' in locals():
+                db.rollback()
+                db.close()
+            return False

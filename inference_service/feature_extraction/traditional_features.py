@@ -17,7 +17,11 @@ class TraditionalFeatureExtractor:
             gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         else:
             gray = image.copy()
-        
+
+        # 转换为uint8
+        if gray.dtype != np.uint8:
+            gray = (gray * 255).astype(np.uint8) if gray.max() <= 1.0 else gray.astype(np.uint8)
+
         # 二值化
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
