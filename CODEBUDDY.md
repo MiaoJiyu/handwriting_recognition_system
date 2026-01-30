@@ -12,6 +12,22 @@ This is a handwriting recognition system using Few-shot Learning to identify han
 - **Desktop**: PyQt6 desktop application at `desktop/`
 - **Shared**: Common protobuf definitions and types at `shared/`
 
+## Documentation
+
+All project documentation is organized in the `docs/` directory.
+
+### Quick Links
+
+| Documentation | Description | Location |
+|--------------|-------------|----------|
+| **README** | Project introduction and quick start guide | [README](./README.md) |
+| **Development Guide** | Detailed development setup and workflow | [DEVELOPMENT](./DEVELOPMENT.md) |
+| **Implementation Check** | System architecture and feature verification | [IMPLEMENTATION_CHECK](./IMPLEMENTATION_CHECK.md) |
+| **User Management Updates** | Batch operations and school management | [USER_MANAGEMENT_UPDATE](./USER_MANAGEMENT_UPDATE.md) |
+| **PaddleOCR Fix** | OCR compatibility and fallback mechanism | [PADDLEOCR_FIX](./PADDLEOCR_FIX.md) |
+| **Recognition Fix** | PCA training and recognition fixes | [RECOGNITION_FIX](./RECOGNITION_FIX.md) |
+| **Paddle Version Fix** | PaddlePaddle version compatibility | [PADDLE_VERSION_FIX](./PADDLE_VERSION_FIX.md) |
+
 ## Common Development Commands
 
 ### Backend (FastAPI)
@@ -35,7 +51,7 @@ alembic upgrade head
 ./run_server.sh
 
 # Or start directly with uvicorn
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload
 
 # Run tests
 pytest tests/ -v
@@ -80,8 +96,8 @@ python -m grpc_server.server
 
 # Run tests (CPU and GPU versions available)
 pytest tests/ -v
-pytest tests/test_deep_inference_cpu.py  # CPU-specific test
-pytest tests/test_deep_inference_gpu.py  # GPU-specific test
+pytest tests/test_deep_inference_cpu.py   # CPU-specific test
+pytest tests/test_deep_inference_gpu.py   # GPU-specific test
 ```
 
 **Note**: The inference service includes built-in libstdc++ preloading logic in `grpc_server/server.py` to handle Nix Python environments automatically.
@@ -104,10 +120,8 @@ npm run build
 npm run preview
 
 # Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
+npm test                # Run all tests
+npm run test:watch     # Run tests in watch mode
 ```
 
 ### Desktop (PyQt6)
@@ -193,62 +207,36 @@ docker-compose logs -f --tail=100 backend
 - `uploads_data`: Uploaded samples and images
 - `models_data`: Trained model files
 
-### Testing
-
-```bash
-# Backend tests
-cd backend
-pytest tests/ -v                    # Run all tests with verbose output
-pytest --cov=app tests/             # Run with coverage report
-pytest tests/test_smoke.py          # Run specific test file
-pytest -k "test_name"              # Run tests matching pattern
-
-# Inference service tests
-cd inference_service
-pytest tests/ -v
-pytest tests/test_deep_inference_cpu.py   # CPU inference test
-pytest tests/test_deep_inference_gpu.py   # GPU inference test (requires GPU)
-
-# Frontend tests
-cd frontend
-npm test                # Run all tests
-npm run test:watch     # Run tests in watch mode
-```
-
-**Note**: Test coverage is currently minimal. The backend has a smoke test, and inference service has CPU/GPU inference tests.
-
 ## Architecture Overview
 
 ### System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────┐
 │                      Client Layer                             │
 ├─────────────────┬───────────────────┬───────────────────────┤
 │   Web Frontend  │   Desktop (PyQt6)  │   Mobile (Future)      │
 │   (React)       │                   │                        │
-└────────┬────────┴─────────┬─────────┴───────────────────────┘
+└─────────────────┴───────────────────┴───────────────────────┘
          │                  │
          │ HTTP/REST        │ gRPC
          ▼                  ▼
-┌─────────────────┐  ┌─────────────────┐
+┌─────────────────┐  ┌─────────────────┬───────────────────────┤
 │   Backend API   │  │  Inference Svc  │
-│   (FastAPI)     │◄─┤  (gRPC + PyTorch)│
-└────────┬────────┘  └────────┬────────┘
+│   (FastAPI)     │  │◄─┤  (gRPC + PyTorch)│
+└─────────────────┘  └─────────────────┴───────────────────────┘
          │                    │
          ├────────────────────┤
          ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐
-│     MySQL       │  │     Redis       │
-│   (Primary DB)  │  │    (Cache)      │
-└─────────────────┘  └─────────────────┘
+    MySQL       │     Redis       │
+(Primary DB)  │   (Cache)      │
 ```
 
 ### Backend API Structure
 
 The backend is organized following a layered architecture:
 
-- **`app/api/`**: FastAPI route handlers (auth, users, samples, recognition, training, schools)
+- **`app/api/`**: FastAPI route handlers (auth, users, samples, recognition, training, schools, config)
 - **`app/models/`**: SQLAlchemy ORM models (User, School, Sample, UserFeature, RecognitionLog, TrainingJob, Model)
 - **`app/core/`**: Core configuration and database connection
 - **`app/services/`**: Business logic layer (inference_client for gRPC communication)
@@ -351,6 +339,9 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 UPLOAD_DIR=./uploads
 SAMPLES_DIR=./uploads/samples
 MODELS_DIR=./models
+
+# 文件上传配置
+MAX_UPLOAD_SIZE=10485760  # 单位：字节，默认10MB (10 * 1024 * 1024 = 10485760)
 ```
 
 ### Inference Service Configuration (`inference_service/.env`)
@@ -361,9 +352,9 @@ GRPC_HOST=0.0.0.0
 GRPC_PORT=50051
 
 # Recognition parameters
-SIMILARITY_THRESHOLD=0.7  # Minimum similarity score
-GAP_THRESHOLD=0.1          # Gap between top scores
-TOP_K=5                    # Number of results to return
+SIMILARITY_THRESHOLD=0.7  # 最小相似度分数
+GAP_THRESHOLD=0.1          # Top-1和Top-2之间最小分数差距
+TOP_K=5                    # 返回结果数量
 
 # Database (for user_features cache)
 DATABASE_URL=mysql+pymysql://user:password@host:3306/handwriting_recognition?charset=utf8mb4
@@ -398,12 +389,12 @@ server: {
 
 1. Modify or create SQLAlchemy model in `backend/app/models/`
 2. Generate migration: `alembic revision --autogenerate -m "description"`
-3. Review generated migration in `backend/alembic/versions/`
+3. Review and edit the generated migration in `backend/alembic/versions/`
 4. Apply migration: `alembic upgrade head`
 
 ### Adding New Features to Inference Service
 
-1. Implement logic in appropriate module (preprocessing, feature_extraction, matching, inference)
+1. Implement logic in appropriate module (preprocessing, feature_extraction, matching, inference, training)
 2. If adding new gRPC method:
    - Update protobuf definition in `shared/proto/handwriting_inference.proto`
    - Regenerate protobuf files: `cd inference_service && ./generate_proto.sh`
@@ -411,23 +402,11 @@ server: {
 3. Update inference client in `backend/app/services/inference_client.py` to call new gRPC method
 4. The client automatically adds repo root to sys.path to import protobuf files from inference_service
 
-**Key Classes**:
-- `inference/inference/recognizer.py`: Main recognition orchestrator
-  - Loads user features from `user_features` table
-  - Orchestrates: preprocessing → feature extraction → matching
-  - Uses Redis for caching (optional)
-- `inference/training/trainer.py`: Model training orchestrator
-  - Trains Siamese Network asynchronously
-  - Updates training job status in database
-- `inference/matching/matcher.py`: Similarity matching logic
-  - Implements gap threshold and similarity threshold logic
-  - Returns top-k results with confidence scores
-
-## Common Issues and Solutions
+## Troubleshooting
 
 ### libstdc++ Issues in Nix Environments
 
-If you see errors about `libstdc++.so.6`, `version GLIBCXX_3.4.x not found`, or other library issues:
+If you see errors about `libstdc++.so.6` or `version GLIBCXX_3.4.x not found`, or other library issues:
 
 ```bash
 cd backend
@@ -449,12 +428,9 @@ Check:
    - Local: `systemctl status mysql`
    - Docker: `docker-compose ps mysql`
 2. Database exists: `mysql -u root -p -e "SHOW DATABASES;"`
-3. `.env` file has correct DATABASE_URL format:
-   ```bash
-   mysql+pymysql://user:password@host:3306/handwriting_recognition?charset=utf8mb4
-   ```
-4. Alembic migrations applied: `cd backend && alembic current`
-5. User permissions: Ensure MySQL user has SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER privileges
+3. `.env` file has correct DATABASE_URL format
+4. User permissions: Ensure MySQL user has SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER privileges
+5. Alembic migrations applied: `cd backend && alembic current`
 
 ### Inference Service Connection Timeout
 
@@ -477,11 +453,25 @@ Check:
 Check:
 1. Backend `CORS_ORIGINS` in `.env` includes frontend URL:
    ```bash
-   CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://your-frontend.com
+   CORS_ORIGINS=http://localhost:3000,http://localhost:5173
    ```
 2. Frontend `VITE_API_URL` in `vite.config.ts` or `.env` matches backend address
 3. JWT token is valid and included in Authorization header: `Bearer <token>`
 4. Backend has custom CORS middleware for `/uploads/*` static files (see `backend/app/main.py:32-53`)
+
+### User Management Page Issues
+
+**"确定" button not working**:
+- Check that form has `onFinish` prop defined in UserManagement.tsx
+- Verify form instance is properly created with `Form.useForm()`
+
+**System configuration not displaying**:
+- Ensure backend API returns all required fields (database_url, inference_service, redis, upload_dir, samples_dir, models_dir, max_upload_size, cors_origins)
+- Check that SystemManagement.tsx uses multiple `Descriptions` components instead of `items` prop
+
+**User creation time not showing**:
+- Verify `UserResponse` model includes `created_at` field with proper datetime serialization
+- Use `@field_serializer` decorator to convert datetime to ISO format string
 
 ### Recognition Returns No Results or "Unknown" User
 
@@ -495,87 +485,41 @@ Check:
 4. Image preprocessing is working correctly (check inference service logs)
 5. Model file exists in `inference_service/models/` or ImageNet fallback is working
 
-## Model and Feature Management
+### Training/Inference Issues
 
-### Model Storage
-- **Model files**: Stored in `inference_service/models/` directory
-- In Docker, this is mounted as a volume (`models_data`) for persistence
-- If no `.pth` file exists, the system uses ImageNet pre-trained weights as fallback
-- Model version tracking in `models` table
+**PCA dimension mismatch error**:
+- Error: `Found array with dim X, while dim <= Y is required by PCA.`
+- Cause: Feature array has wrong dimension (3D instead of 2D)
+- Solution: Use `np.squeeze(features_array, axis=1)` to remove extra dimension
+- Location: `inference_service/training/trainer.py:347`
 
-### Feature Cache
-- **User features**: Pre-computed feature vectors stored in `user_features` table
-- Features are extracted during training and cached for faster recognition
-- The inference service loads these features from the database for each recognition request
-- Feature format: JSON-serialized numpy arrays
+**All users showing same similarity score (e.g., all 52.15%)**:
+- This indicates features are not being properly extracted or PCA is not differentiating users
+- Check user_features table contains unique feature vectors for each user
+- Verify training used sufficient samples per user (at least 2-3 samples recommended)
+- Check inference service logs for feature extraction errors
+- Review similarity calculation in `inference_service/matching/matcher.py`
 
-### Training Workflow
-1. Samples are uploaded via frontend (`POST /api/samples/upload`)
-2. Teacher triggers training via frontend (`POST /api/training/start`)
-3. Backend creates a `training_job` record and calls gRPC `TrainModel()`
-4. Inference service trains asynchronously:
-   - Loads all user samples from database
-   - Trains Siamese Network
-   - Extracts features for each user
-   - Saves features to `user_features` table
-   - Updates `training_job` status to "completed"
-5. New models and features are available immediately for recognition
-
-### Feature Extraction Pipeline
-- **Deep Learning**: PyTorch Siamese Network (256-dim features)
-- **Traditional Features**: LBP (Local Binary Patterns) + Gabor filters
-- **Fusion**: Both feature types are combined using weighted fusion
-- Final feature vector is stored in database for matching
-
-## Testing Strategy
-
-- **Backend**: pytest for API endpoint testing (currently minimal - smoke test only)
-- **Inference Service**: pytest for model inference testing (both CPU and GPU versions available)
-- **Frontend**: vitest for component testing
-- **Manual Testing**: Swagger UI at `http://localhost:8000/docs` for API exploration
-
-## Recognition Flow
-
-When a user uploads an image for recognition:
-
-1. **Frontend**: User uploads image via `POST /api/recognition` (multipart/form-data)
-2. **Backend API** (`app/api/recognition.py`):
-   - Validates request and user authentication
-   - Saves uploaded image to `uploads/` directory
-   - Calls gRPC `Recognize()` method via `inference_client.py`
-3. **Inference Service** (`inference/inference/recognizer.py`):
-   - Preprocesses image: `ImageProcessor.process_sample()` (print/handwriting separation, enhancement)
-   - Extracts features: `FeatureFusion.extract_fused_features()` (deep + traditional features)
-   - Loads user features from `user_features` table
-   - Matches against feature library: `Matcher.match()` (similarity calculation, gap threshold)
-   - Returns top-k results with confidence scores
-4. **Backend API**: Returns results to frontend in JSON format
-5. **Frontend**: Displays recognition results with confidence scores
-
-**Key Parameters**:
-- `SIMILARITY_THRESHOLD` (default 0.7): Minimum similarity score to consider a match
-- `GAP_THRESHOLD` (default 0.1): Minimum gap between top-1 and top-2 scores to prevent false matches
-- `TOP_K` (default 5): Number of results to return
-
-## Important File Locations
+## Key File Locations
 
 ### Backend
 - `backend/app/main.py`: FastAPI application entry point, CORS middleware, static file serving
-- `backend/app/core/config.py`: Configuration management using Pydantic Settings
+- `backend/app/core/config.py`: Configuration management
+- `backend/app/api/`: REST API route handlers
 - `backend/app/services/inference_client.py`: gRPC client for communicating with inference service
-- `backend/app/api/`: REST API route handlers (auth, users, samples, recognition, training, schools)
 - `backend/app/models/`: SQLAlchemy ORM models
 - `backend/alembic/versions/`: Database migration scripts
+- `backend/requirements.txt`: Python dependencies (includes PaddlePaddle, PaddleOCR, OpenPyXL)
 
 ### Inference Service
 - `inference_service/grpc_server/server.py`: gRPC server implementation with 5 methods
 - `inference_service/inference/recognizer.py`: Main recognition orchestrator
 - `inference_service/training/trainer.py`: Model training orchestrator
-- `inference_service/preprocessing/`: Image processing modules (segmentation, enhancement)
-- `inference_service/feature_extraction/`: Feature extraction modules (deep, traditional, fusion)
-- `inference_service/matching/`: Similarity matching algorithms
+- `inference_service/matching/matcher.py`: Similarity matching logic
+- `inference_service/preprocessing/`: Image processing modules
+- `inference_service/feature_extraction/`: Feature extraction modules
 - `inference_service/model/siamese_network.py`: Siamese Network definition
-- `inference_service/models/`: Model weights directory
+- `inference_service/core/config.py`: Configuration
 
 ### Shared
 - `shared/proto/handwriting_inference.proto`: gRPC service definition
@@ -583,54 +527,244 @@ When a user uploads an image for recognition:
 - `shared/constants.py`: Shared constants
 
 ### Frontend
-- `frontend/src/pages/`: Page components (Login, Dashboard, SampleList, Recognition, etc.)
+- `frontend/src/pages/`: Page components (Login, Dashboard, SampleList, SampleUpload, Recognition, UserManagement, SystemManagement)
 - `frontend/src/components/`: Reusable components (Layout, ImageCropper)
-- `frontend/src/services/`: API client functions
-- `frontend/src/contexts/`: React Context for global state
+- `frontend/src/services/`: API client functions (api.ts, config.ts)
+- `frontend/src/contexts/`: React Context (Auth context)
 - `frontend/src/types/`: TypeScript type definitions
 - `frontend/vite.config.ts`: Vite configuration including API proxy
+- `frontend/package.json`: Dependencies (includes xlsx)
 
-## Development Tips
+### Documentation
+- `docs/README.md`: Project introduction and quick start
+- `docs/DEVELOPMENT.md`: Detailed development setup and workflow
+- `docs/IMPLEMENTATION_CHECK.md`: System architecture and feature verification
+- `docs/USER_MANAGEMENT_UPDATE.md`: User management batch operations and school management
+- `docs/PADDLEOCR_FIX.md`: OCR compatibility and fallback mechanism
+- `docs/RECOGNITION_FIX.md`: PCA training and recognition fixes
+- `docs/PADDLE_VERSION_FIX.md`: PaddlePaddle version compatibility fix
 
-### Starting All Services Locally
+## Recent Updates
 
-For full local development:
+### Frontend Bug Fixes (2026-01-30)
+- ✅ Fixed UserManagement page: Added missing `form` instance for single user creation
+- ✅ Fixed SystemManagement page: Added missing `useQueryClient` import
+- ✅ Fixed user creation time: Added `created_at` field to `UserResponse` with datetime serialization
+- ✅ Fixed system configuration display: Restructured `Descriptions` components and added missing fields
+- ✅ Fixed operation history: Added Timeline component to display recent system operations
+- ✅ Fixed user list query: Corrected datetime type mismatch in API response
 
-```bash
-# Terminal 1: Start MySQL and Redis (if not using Docker)
-# Or use: docker-compose up -d mysql redis
+### Recognition System Fixes (NEW)
+- ✅ Fixed PCA training to use all samples and save model
+- ✅ Fixed PCA dimension mismatch between training and recognition
+- ✅ Implemented PCA model persistence (models/pca.pkl)
+- ✅ Added OpenCV fallback mechanism for PaddleOCR failures
+- ✅ Updated PaddlePaddle version to compatible 2.6.2
+- ✅ Fixed feature array dimension issue in trainer.py (3D → 2D)
+- ✅ Added PCA save functionality in `fit_pca()` method
 
-# Terminal 2: Start backend
-cd backend
-source venv/bin/activate
-./run_server.sh  # or: uvicorn app.main:app --reload
+### Upload Size Configuration (NEW)
+- ✅ Configurable max upload size via .env
+- ✅ Backend validation with HTTP 413 error
+- ✅ Frontend validation with configurable limits
+- ✅ 10MB default limit
 
-# Terminal 3: Start inference service
-cd inference_service
-source venv/bin/activate
-python -m grpc_server.server  # or: ./run_server.sh
+### System Management Features (NEW)
+- ✅ System reload API endpoint for admins
+- ✅ System configuration endpoint
+- ✅ Frontend system management page with configuration display
+- ✅ Operation history timeline for tracking system changes
+- ✅ Hot-reload capability without service restart
 
-# Terminal 4: Start frontend
-cd frontend
-npm run dev
+### User Management Features (NEW)
+- ✅ Batch student creation with automatic ID and password generation
+- ✅ Excel import/export for student management
+- ✅ School selection and filtering for multi-school deployments
+- ✅ Teacher role can manage students
+- ✅ System administrator role can manage all schools
+
+### Upload Size Configuration (NEW)
+- ✅ Configurable max upload size via .env
+- ✅ Backend validation with HTTP 413 error
+- ✅ Frontend validation with configurable limits
+- ✅ 10MB default limit
+
+## Model and Feature Management
+
+### Feature Extraction Pipeline
+- Deep Learning: PyTorch Siamese Network (256-dim features)
+- Traditional Features: LBP + Gabor filters
+- Feature Fusion: Combines both approaches
+- PCA Dimensionality Reduction: For efficiency
+- Normalization: L2 normalization on features
+
+### Training Workflow
+1. Samples uploaded via frontend
+2. Teacher triggers training via `POST /api/training/start`
+3. Backend creates training job record
+4. Inference service trains Siamese Network asynchronously
+5. Features extracted and saved to `user_features` table
+6. PCA model trained and persisted to disk
+7. Training job status updated to "completed"
+
+### Recognition Workflow
+1. Image uploaded via frontend `POST /api/recognition`
+2. Backend saves to temporary file
+3. Inference service extracts features (deep + traditional)
+4. Features normalized and PCA transformed
+5. Loaded user features from database
+6. Cosine similarity calculated
+7. Top-k results with confidence scores
+8. Results returned to frontend
+
+## Testing Strategy
+
+### Backend
+- pytest for API endpoint testing (currently minimal - smoke test only)
+- Inference service has CPU/GPU inference tests
+- Manual testing via Swagger UI at `http://localhost:8000/docs`
+
+### Frontend
+- vitest for component testing
+- Manual testing of user flows
+
+### Integration Testing
+1. Test complete flow: User registration → Sample upload → Training → Recognition
+2. Test all roles: system_admin, school_admin, teacher, student
+3. Test file upload size limits
+4. Test system reload functionality
+
+## Common Issues and Solutions
+
+See individual documentation files for detailed troubleshooting of specific issues.
+
+## Code Structure Overview
+
+### Backend API Organization
+
+```
+backend/app/
+├── api/
+│   ├── auth.py              # Authentication endpoints (login, register)
+│   ├── users.py            # User management (CRUD + batch operations)
+│   ├── samples.py          # Sample upload, list, delete
+│   ├── recognition.py       # Recognition endpoint
+│   ├── training.py          # Training coordination
+│   ├── schools.py          # School management
+│   └── config.py           # System configuration endpoint
+├── models/
+│   ├── user.py              # User ORM model
+│   ├── school.py            # School ORM model
+│   ├── sample.py            # Sample ORM model
+│   ├── user_feature.py       # User feature ORM model
+│   ├── recognition_log.py    # Recognition log ORM model
+│   ├── training_job.py       # Training job ORM model
+│   └── model.py             # Model ORM model
+├── core/
+│   ├── config.py             # Settings management
+│   └── database.py          # Database connection
+├── services/
+│   └── inference_client.py  # gRPC communication
+└── utils/
+    ├── dependencies.py        # Auth dependencies
+    └── security.py            # Password hashing
 ```
 
-Access:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-- Inference Service: localhost:50051 (gRPC)
+### Inference Service Organization
 
-### Debugging
+```
+inference_service/
+├── grpc_server/
+│   ├── server.py            # gRPC server with 5 methods
+│   └── generate_proto.py  # Protobuf generation
+├── inference/
+│   ├── recognizer.py         # Main recognition orchestrator
+│   ├── training/
+│   │   └── trainer.py      # Model training
+│   ├── matching/
+│   │   └── matcher.py         # Similarity calculation
+│   ├── preprocessing/
+│   │   ├── image_processor.py
+│   │   └── segmentation.py
+│   ├── feature_extraction/
+│   │   ├── deep_features.py   # PyTorch features
+│   │   ├── traditional_features.py
+│   │   └── feature_fusion.py
+│   └── model/
+│       └── siamese_network.py
+└── core/
+    └── config.py             # Configuration
+```
 
-- **Backend**: Use VS Code debugger or add `import pdb; pdb.set_trace()` breakpoints
-- **Inference Service**: Add logging in `inference_service/inference/recognizer.py` or other modules
-- **gRPC Communication**: Check logs in both `backend/app/services/inference_client.py` and `inference_service/grpc_server/server.py`
-- **Database**: Use MySQL CLI or tools like DBeaver, TablePlus to inspect `user_features`, `samples`, `training_jobs` tables
+### Frontend Organization
 
-### Performance Optimization
+```
+frontend/src/
+├── pages/
+│   ├── Login.tsx
+│   ├── Dashboard.tsx
+│   ├── SampleList.tsx
+│   ├── SampleUpload.tsx
+│   ├── Recognition.tsx
+│   ├── UserManagement.tsx  # Updated with batch operations
+│   └── SystemManagement.tsx
+├── components/
+│   ├── Layout.tsx           # App layout with navigation
+│   └── ImageCropper.tsx     # Image cropping component
+├── services/
+│   ├── api.ts               # Main API client
+│   ├── config.ts            # Configuration API client
+│   └── auth.ts              # Auth service client
+├── contexts/
+│   └── AuthContext.tsx        # Authentication context
+└── types/
+    └── index.ts              # TypeScript type definitions
+```
 
-- Inference service loads user features from database on each recognition request. For high-load scenarios, consider Redis caching.
-- Feature extraction is the bottleneck. GPU acceleration significantly improves performance.
-- Model training is asynchronous and doesn't block recognition requests.
-- Use batch recognition (`BatchRecognize`) for processing multiple images efficiently.
+## Getting Started
+
+### Prerequisites
+1. Python 3.8 or higher
+2. Node.js 16 or higher
+3. MySQL 8.0 or higher
+4. (Optional) Docker and Docker Compose
+
+### First Time Setup
+
+1. Clone repository
+2. Configure backend environment:
+   ```bash
+   cd backend
+   cp .env.example .env
+   # Edit .env with your database credentials
+   ```
+
+3. Start services:
+   ```bash
+   # Start MySQL (or use Docker)
+   docker-compose up -d mysql redis
+
+   # Start backend
+   cd backend
+   ./run_server.sh
+
+   # Start inference service
+   cd inference_service
+   python -m grpc_server.server
+   ```
+
+4. Install frontend dependencies and start:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+5. Access application:
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+
+## Project Information
+
+This is a handwriting recognition system using Few-shot Learning to identify handwriting from assignments. For more information, see the documentation in the `docs/` directory.

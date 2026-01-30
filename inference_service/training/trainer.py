@@ -179,9 +179,9 @@ class Trainer:
 
             # 决定训练策略
             if force_retrain or existing_model is None:
-                # 全量重训练
-                logger.info("执行全量重训练")
-                model = SiameseNetwork()
+                # 全量重训练 - 禁用ImageNet预训练，从头学习字迹特征
+                logger.info("执行全量重训练（禁用ImageNet预训练）")
+                model = SiameseNetwork(use_imagenet_pretrained=False)
             else:
                 # 增量训练（微调）
                 logger.info("执行增量训练（微调）")
@@ -202,10 +202,10 @@ class Trainer:
 
             # 损失函数和优化器
             criterion = TripletLoss(margin=1.0)
-            optimizer = optim.Adam(model.parameters(), lr=0.001 if force_retrain else 0.0001)  # 增量训练使用更小的学习率
+            optimizer = optim.Adam(model.parameters(), lr=0.001)  # 使用统一的学习率
 
-            # 训练（先降低 epoch，保证能在资源受限环境跑通）
-            num_epochs = 3
+            # 训练（增加 epoch 数量以提高学习效果）
+            num_epochs = 15
             total_batches = len(dataloader) * num_epochs
             current_batch = 0
 
@@ -317,6 +317,14 @@ class Trainer:
             # FeatureFusion 在循环外创建，避免PCA状态冲突
             feature_fusion = FeatureFusion()
 
+            # 删除旧的PCA模型以确保使用新的PCA策略
+            pca_path = "models/pca.pkl"
+            if os.path.exists(pca_path):
+                os.remove(pca_path)
+                logger.info(f"删除旧的PCA模型: {pca_path}")
+                # 重新创建FeatureFusion以清除PCA状态
+                feature_fusion = FeatureFusion()
+
             # 按用户分组样本
             user_samples = {}
             for sample in samples:
@@ -325,7 +333,32 @@ class Trainer:
                     user_samples[user_id] = []
                 user_samples[user_id].append(sample)
 
-            # 为每个用户提取并更新特征
+            # 首先收集所有训练样本用于PCA训练
+            all_training_images = []
+            for user_sample_list in user_samples.values():
+                for sample in user_sample_list:
+                    processed_image, _ = self.image_processor.process_sample(
+                        sample["image_path"],
+                        separation_mode=sample.get("separation_mode", "auto"),
+                        annotation=sample.get("annotation_data")
+                    )
+                    all_training_images.append(processed_image)
+
+            # 使用所有训练样本提取原始特征（不归一化）
+            logger.info(f"提取 {len(all_training_images)} 个训练样本的原始特征")
+            raw_features_list = []
+            for img in all_training_images:
+                raw_features = feature_fusion._extract_raw_features(img)
+                raw_features_list.append(raw_features)
+
+            if len(raw_features_list) > 0:
+                # 压缩维度：(m, 1, n) -> (m, n)
+                features_array = np.squeeze(np.array(raw_features_list), axis=1)
+                # 训练PCA
+                logger.info(f"用 {features_array.shape[0]} 个样本，{features_array.shape[1]} 维特征训练PCA")
+                feature_fusion.fit_pca(features_array)
+
+            # 为每个用户提取并更新特征（使用已训练的PCA）
             for user_id, user_sample_list in user_samples.items():
                 try:
                     # 批量预处理该用户的所有样本
@@ -338,8 +371,8 @@ class Trainer:
                         )
                         processed_images.append(processed_image)
 
-                    # 批量提取特征（一次性传入所有样本，解决PCA单样本问题）
-                    features_list = feature_fusion.extract_fused_features(processed_images)
+                    # 提取特征（PCA已训练，使用extract_batch避免重新拟合）
+                    features_list = feature_fusion.extract_batch(processed_images)
 
                     # 计算平均特征
                     if len(features_list) > 0:

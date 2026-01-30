@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
 import { Upload, Button, message, Card, Image, Table, Tag, Row, Col } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { configService } from '../services/config';
 import type { UploadFile } from 'antd';
 
 const Recognition: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
   const [result, setResult] = useState<any>(null);
+
+  // 获取系统配置
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: configService.getConfig,
+    staleTime: 5 * 60 * 1000, // 5分钟内不重新请求
+  });
+
+  const maxUploadSizeMB = config?.max_upload_size_mb || 10;
 
   const recognizeMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -48,9 +58,9 @@ const Recognition: React.FC = () => {
       message.error('只能上传图片文件');
       return false;
     }
-    const isLt10M = file.size / 1024 / 1024 < 10;
-    if (!isLt10M) {
-      message.error('图片大小不能超过10MB');
+    const isLtMax = file.size / 1024 / 1024 < maxUploadSizeMB;
+    if (!isLtMax) {
+      message.error(`图片大小不能超过${maxUploadSizeMB}MB`);
       return false;
     }
     return false;

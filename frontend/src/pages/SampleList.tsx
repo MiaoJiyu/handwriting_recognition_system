@@ -18,9 +18,17 @@ const getImageUrl = (imagePath: string | null): string => {
   return `/uploads/${filename}`;
 };
 
+interface UserInfo {
+  id: number;
+  username: string;
+  nickname: string | null;
+  role: string;
+}
+
 interface Sample {
   id: number;
   user_id: number;
+  user: UserInfo | null;
   image_path: string;
   image_url: string;
   original_filename: string;
@@ -106,6 +114,16 @@ const SampleList: React.FC = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
+    },
+    {
+      title: '学生',
+      dataIndex: 'user',
+      key: 'user',
+      width: 150,
+      render: (user: UserInfo | null) => {
+        if (!user) return '-';
+        return user.nickname ? `${user.nickname} (${user.username})` : user.username;
+      },
     },
     {
       title: '预览',
@@ -215,6 +233,13 @@ const SampleList: React.FC = () => {
               }
               description={
                 <div style={{ fontSize: 12 }}>
+                  <div style={{ marginBottom: 4, color: '#666' }}>
+                    {sample.user
+                      ? sample.user.nickname
+                        ? `${sample.user.nickname} (${sample.user.username})`
+                        : sample.user.username
+                      : '-'}
+                  </div>
                   {getStatusTag(sample.status)}
                   <div style={{ marginTop: 4, color: '#999' }}>
                     {new Date(sample.uploaded_at).toLocaleDateString()}

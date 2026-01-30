@@ -18,6 +18,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    nickname = Column(String(100), nullable=True)  # 昵称/学生姓名
     role = Column(Enum(UserRole), nullable=False, default=UserRole.STUDENT)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

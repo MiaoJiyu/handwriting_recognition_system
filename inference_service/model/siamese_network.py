@@ -53,7 +53,9 @@ class SiameseNetwork(nn.Module):
 class ModelManager:
     """模型管理器"""
 
-    def __init__(self, model_dir: str = "./models", device: str | None = None, use_imagenet_pretrained: bool = True):
+    def __init__(self, model_dir: str = "./models", device: str | None = None, use_imagenet_pretrained: bool = False):
+        # 默认禁用ImageNet预训练，因为预训练模型不是为字迹识别训练的
+        # 用户如果需要可以从随机初始化开始训练
         self.model_dir = model_dir
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,7 +69,7 @@ class ModelManager:
     def load_model(self, version: str = "latest") -> SiameseNetwork:
         """加载模型
 
-        - version=latest：优先加载 model_dir 下最新的 .pth；若不存在则回退到 ImageNet 预训练（按 use_imagenet_pretrained）。
+        - version=latest：优先加载 model_dir 下最新的 .pth；若不存在则初始化新模型（不使用ImageNet预训练）。
         """
         resolved_version = version
         if version == "latest":

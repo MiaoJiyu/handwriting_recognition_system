@@ -1,23 +1,36 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Form
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from datetime import datetime
 import os
 import shutil
 import json
+import threading
 from ..core.database import get_db
 from ..core.config import settings
 from ..models.sample import Sample, SampleStatus, SampleRegion
 from ..models.user import User
 from ..utils.dependencies import get_current_user, require_teacher_or_above
+from ..utils.image_processor import auto_crop_sample_image
 
 router = APIRouter(prefix="/api/samples", tags=["样本管理"])
+
+
+class UserInfo(BaseModel):
+    id: int
+    username: str
+    nickname: Optional[str] = None
+    role: str
+
+    class Config:
+        from_attributes = True
 
 
 class SampleResponse(BaseModel):
     id: int
     user_id: int
+    user: Optional[UserInfo] = None  # 用户信息
     image_path: str
     image_url: str
     original_filename: str
@@ -50,10 +63,15 @@ class CropRequest(BaseModel):
     bbox: dict  # {"x": 10, "y": 20, "width": 100, "height": 50}
 
 
+class SampleUploadRequest(BaseModel):
+    student_id: Optional[int] = None  # 目标学生ID，仅教师及以上权限可用
+
+
 @router.post("/upload", response_model=SampleResponse, status_code=status.HTTP_201_CREATED)
 async def upload_sample(
     request: Request,
     file: UploadFile = File(...),
+    student_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -64,13 +82,60 @@ async def upload_sample(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="只能上传图片文件"
         )
+
+    # 验证文件大小
+    file_size = 0
+    for chunk in file.file:
+        file_size += len(chunk)
+        if file_size > settings.MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB"
+            )
+    # 重置文件指针到开头
+    await file.seek(0)
+
+    # 确定目标用户ID
+    target_user_id = current_user.id
+    
+    # 如果提供了student_id，验证权限并获取目标用户
+    if student_id:
+        # 只有教师及以上权限才能为其他用户上传样本
+        if current_user.role.value not in ["teacher", "school_admin", "system_admin"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权为其他用户上传样本"
+            )
+        
+        try:
+            target_user_id = int(student_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="student_id必须是有效的整数"
+            )
+        
+        # 验证目标用户是否存在
+        target_user = db.query(User).filter(User.id == target_user_id).first()
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="目标用户不存在"
+            )
+        
+        # 学校管理员只能为同校用户上传样本
+        if current_user.role.value == "school_admin" and current_user.school_id != target_user.school_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能为同校用户上传样本"
+            )
     
     # 创建上传目录
     os.makedirs(settings.SAMPLES_DIR, exist_ok=True)
     
     # 保存文件
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{current_user.id}_{timestamp}_{file.filename}"
+    filename = f"{target_user_id}_{timestamp}_{file.filename}"
     file_path = os.path.join(settings.SAMPLES_DIR, filename)
     
     with open(file_path, "wb") as buffer:
@@ -81,7 +146,7 @@ async def upload_sample(
 
     # 创建样本记录
     sample = Sample(
-        user_id=current_user.id,
+        user_id=target_user_id,
         image_path=file_path,
         original_filename=file.filename,
         status=SampleStatus.PENDING
@@ -89,6 +154,53 @@ async def upload_sample(
     db.add(sample)
     db.commit()
     db.refresh(sample)
+
+    # 启动后台线程进行自动裁剪
+    def process_auto_crop(sample_id: int, image_path: str):
+        """后台处理自动裁剪"""
+        from sqlalchemy.orm import sessionmaker
+        from ..core.database import engine
+        
+        # 创建新的数据库会话
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        local_db = SessionLocal()
+        
+        try:
+            print(f"开始自动裁剪样本 {sample_id}")
+            
+            # 调用自动裁剪函数
+            bbox, cropped_path = auto_crop_sample_image(image_path, sample_id)
+            
+            if bbox and cropped_path:
+                # 创建自动检测的区域记录
+                region = SampleRegion(
+                    sample_id=sample_id,
+                    bbox=json.dumps(bbox),
+                    is_auto_detected=1  # 自动检测
+                )
+                local_db.add(region)
+                
+                # 更新样本信息
+                sample_record = local_db.query(Sample).filter(Sample.id == sample_id).first()
+                if sample_record:
+                    sample_record.status = SampleStatus.PROCESSED
+                    sample_record.extracted_region_path = cropped_path
+                    sample_record.processed_at = datetime.utcnow()
+                
+                local_db.commit()
+                print(f"样本 {sample_id} 自动裁剪成功")
+            else:
+                print(f"样本 {sample_id} 自动裁剪失败")
+                # 如果没有检测到文本区域，保持PENDING状态等待手动处理
+                
+        except Exception as e:
+            print(f"样本 {sample_id} 自动裁剪处理异常: {str(e)}")
+            local_db.rollback()
+        finally:
+            local_db.close()
+    
+    # 启动后台线程
+    threading.Thread(target=process_auto_crop, args=(sample.id, sample.image_path), daemon=True).start()
 
     return SampleResponse(
         id=sample.id,
@@ -114,27 +226,39 @@ async def list_samples(
     current_user: User = Depends(get_current_user)
 ):
     """获取样本列表"""
-    query = db.query(Sample)
-    
+    query = db.query(Sample).options(joinedload(Sample.user))
+
     # 权限控制：学生只能查看自己的样本
     if current_user.role.value == "student":
         query = query.filter(Sample.user_id == current_user.id)
     elif user_id:
         query = query.filter(Sample.user_id == user_id)
-    
+
     if status:
         query = query.filter(Sample.status == status)
-    
+
     samples = query.order_by(Sample.uploaded_at.desc()).limit(limit).all()
 
     base = str(request.base_url).rstrip('/')
     resp: List[SampleResponse] = []
     for s in samples:
         filename = os.path.basename(s.image_path)
+
+        # 构建用户信息
+        user_info = None
+        if s.user:
+            user_info = UserInfo(
+                id=s.user.id,
+                username=s.user.username,
+                nickname=s.user.nickname,
+                role=s.user.role.value
+            )
+
         resp.append(
             SampleResponse(
                 id=s.id,
                 user_id=s.user_id,
+                user=user_info,
                 image_path=s.image_path,
                 image_url=f"{base}/uploads/samples/{filename}",
                 original_filename=s.original_filename,
@@ -156,25 +280,37 @@ async def get_sample(
     current_user: User = Depends(get_current_user)
 ):
     """获取样本详情"""
-    sample = db.query(Sample).filter(Sample.id == sample_id).first()
+    sample = db.query(Sample).options(joinedload(Sample.user)).filter(Sample.id == sample_id).first()
     if not sample:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="样本不存在"
         )
-    
+
     # 权限检查
     if current_user.role.value == "student" and sample.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权查看其他用户的样本"
         )
-    
+
     base = str(request.base_url).rstrip('/')
     filename = os.path.basename(sample.image_path)
+
+    # 构建用户信息
+    user_info = None
+    if sample.user:
+        user_info = UserInfo(
+            id=sample.user.id,
+            username=sample.user.username,
+            nickname=sample.user.nickname,
+            role=sample.user.role.value
+        )
+
     return SampleDetailResponse(
         id=sample.id,
         user_id=sample.user_id,
+        user=user_info,
         image_path=sample.image_path,
         image_url=f"{base}/uploads/samples/{filename}",
         original_filename=sample.original_filename,

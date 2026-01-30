@@ -9,6 +9,7 @@ import {
   UserOutlined,
   SettingOutlined,
   LogoutOutlined,
+  ControlOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -57,6 +58,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         key: '/training',
         icon: <SettingOutlined />,
         label: '训练管理',
+      }
+    );
+  }
+
+  if (user && user.role === 'system_admin') {
+    menuItems.push(
+      {
+        key: '/system',
+        icon: <ControlOutlined />,
+        label: '系统管理',
       }
     );
   }

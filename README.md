@@ -186,9 +186,8 @@ docker-compose logs -f backend
 
 ## 文档
 
-- [开发指南](./DEVELOPMENT.md) - 详细的开发环境搭建和规范
-- [实现检查](./IMPLEMENTATION_CHECK.md) - 功能完成度检查报告
-- [架构规划](./字迹识别系统架构规划_ed56fc08.plan.md) - 系统设计文档
+- [开发指南](./docs/DEVELOPMENT.md) - 详细的开发环境搭建和规范
+- [实现检查](./docs/IMPLEMENTATION_CHECK.md) - 功能完成度检查报告
 
 ## License
 

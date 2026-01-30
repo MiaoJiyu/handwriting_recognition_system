@@ -12,6 +12,7 @@ import SampleList from './pages/SampleList';
 import Recognition from './pages/Recognition';
 import UserManagement from './pages/UserManagement';
 import TrainingManagement from './pages/TrainingManagement';
+import SystemManagement from './pages/SystemManagement';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -52,6 +53,7 @@ const App: React.FC = () => {
                         <Route path="/recognition" element={<Recognition />} />
                         <Route path="/users" element={<UserManagement />} />
                         <Route path="/training" element={<TrainingManagement />} />
+                        <Route path="/system" element={<SystemManagement />} />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>

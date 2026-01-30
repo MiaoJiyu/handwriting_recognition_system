@@ -21,8 +21,17 @@ const Dashboard: React.FC = () => {
     },
   });
 
+  const { data: recognitionLogs } = useQuery({
+    queryKey: ['recognition', 'logs', 'stats'],
+    queryFn: async () => {
+      const res = await api.get('/recognition/logs?limit=10000');
+      return res.data;
+    },
+  });
+
   const sampleCount = samples?.length || 0;
   const userCount = users?.length || 0;
+  const recognitionCount = recognitionLogs?.length || 0;
 
   return (
     <div>
@@ -50,7 +59,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <Statistic
               title="识别次数"
-              value={0}
+              value={recognitionCount}
               prefix={<SearchOutlined />}
             />
           </Card>

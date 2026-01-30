@@ -4,6 +4,7 @@ import { api } from '../services/api';
 interface User {
   id: number;
   username: string;
+  nickname: string | null;  // 添加昵称字段
   role: string;
   school_id: number | null;
 }

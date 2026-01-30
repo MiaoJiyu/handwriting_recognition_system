@@ -1,11 +1,12 @@
-import React from 'react';
-import { Table, Button, message, Card, Tag, Tooltip } from 'antd';
+import React, { useState } from 'react';
+import { Table, Button, message, Card, Tag, Tooltip, Space, Modal } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { PlayCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 const TrainingManagement: React.FC = () => {
   const queryClient = useQueryClient();
+  const [trainingType, setTrainingType] = useState<'full' | 'incremental' | null>(null);
 
   const { data: jobs, isLoading } = useQuery({
     queryKey: ['training-jobs'],
@@ -16,18 +17,35 @@ const TrainingManagement: React.FC = () => {
   });
 
   const startTrainingMutation = useMutation({
-    mutationFn: async () => {
-      await api.post('/training', { force_retrain: false });
+    mutationFn: async (forceRetrain: boolean) => {
+      await api.post('/training', { force_retrain: forceRetrain });
     },
-    onSuccess: () => {
-      message.success('训练任务已启动');
+    onSuccess: (_, forceRetrain) => {
+      const trainingTypeName = forceRetrain ? '全量训练' : '增量训练';
+      message.success(`${trainingTypeName}任务已启动`);
+      setTrainingType(null);
       queryClient.invalidateQueries({ queryKey: ['training-jobs'] });
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
       message.error(detail ? `启动训练失败：${detail}` : '启动训练失败');
+      setTrainingType(null);
     },
   });
+
+  const handleStartTraining = (forceRetrain: boolean, type: 'full' | 'incremental') => {
+    Modal.confirm({
+      title: '确认启动训练',
+      icon: <ExclamationCircleOutlined />,
+      content: `确定要启动${forceRetrain ? '全量训练' : '增量训练'}吗？${forceRetrain ? '全量训练会重新训练整个模型，耗时较长。' : '增量训练会在现有模型基础上进行微调，速度较快。'}`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        setTrainingType(type);
+        startTrainingMutation.mutate(forceRetrain);
+      },
+    });
+  };
 
   const columns = [
     {
@@ -73,16 +91,25 @@ const TrainingManagement: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>训练管理</h1>
-        <Button
-          type="primary"
-          icon={<PlayCircleOutlined />}
-          onClick={() => startTrainingMutation.mutate()}
-          loading={startTrainingMutation.isPending}
-        >
-          启动训练
-        </Button>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => handleStartTraining(true, 'full')}
+            loading={startTrainingMutation.isPending && trainingType === 'full'}
+          >
+            全量训练
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            onClick={() => handleStartTraining(false, 'incremental')}
+            loading={startTrainingMutation.isPending && trainingType === 'incremental'}
+          >
+            增量训练
+          </Button>
+        </Space>
       </div>
       <Card title="训练任务" style={{ marginBottom: 24 }}>
         <Table columns={columns} dataSource={jobs} loading={isLoading} rowKey="id" />

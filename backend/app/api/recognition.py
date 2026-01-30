@@ -35,6 +35,25 @@ async def recognize(
     current_user = Depends(require_teacher_or_above)
 ):
     """识别单张图片"""
+    # 验证文件类型
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只能上传图片文件"
+        )
+
+    # 验证文件大小
+    file_size = 0
+    for chunk in file.file:
+        file_size += len(chunk)
+        if file_size > settings.MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB"
+            )
+    # 重置文件指针到开头
+    await file.seek(0)
+
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(settings.UPLOAD_DIR, f"temp_{timestamp}_{file.filename}")

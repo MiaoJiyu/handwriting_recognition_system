@@ -12,7 +12,8 @@ class DeepFeatureExtractor:
     def __init__(self, model_manager: ModelManager = None):
         if model_manager is None:
             from core.config import settings
-            self.model_manager = ModelManager(settings.MODEL_DIR)
+            # 禁用ImageNet预训练，因为预训练模型不是为字迹识别训练的
+            self.model_manager = ModelManager(settings.MODEL_DIR, use_imagenet_pretrained=False)
         else:
             self.model_manager = model_manager
     

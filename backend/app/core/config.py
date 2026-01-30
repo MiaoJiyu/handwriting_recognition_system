@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     SAMPLES_DIR: str = "./uploads/samples"
     MODELS_DIR: str = "./models"
-    
+
+    # 文件上传配置
+    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+
     # CORS配置 - store as string to avoid JSON parsing issues
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     

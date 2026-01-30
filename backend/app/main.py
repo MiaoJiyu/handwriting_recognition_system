@@ -10,7 +10,9 @@ from .api import (
     training_router,
     recognition_router,
     schools_router,
-    samples_router
+    samples_router,
+    config_router,
+    system_router
 )
 
 app = FastAPI(
@@ -87,6 +89,8 @@ app.include_router(training_router)
 app.include_router(recognition_router)
 app.include_router(schools_router)
 app.include_router(samples_router)
+app.include_router(config_router)
+app.include_router(system_router)
 
 
 @app.get("/")
