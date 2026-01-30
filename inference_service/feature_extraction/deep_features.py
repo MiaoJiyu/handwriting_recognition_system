@@ -3,15 +3,15 @@ import torch.nn as nn
 import torchvision.models as models
 from typing import Union
 import numpy as np
-from model.siamese_network import ModelManager
 
 
 class DeepFeatureExtractor:
     """深度学习特征提取器"""
-    
-    def __init__(self, model_manager: ModelManager = None):
+
+    def __init__(self, model_manager = None):
         if model_manager is None:
             from core.config import settings
+            from model.siamese_network import ModelManager
             # 禁用ImageNet预训练，因为预训练模型不是为字迹识别训练的
             self.model_manager = ModelManager(settings.MODEL_DIR, use_imagenet_pretrained=False)
         else:

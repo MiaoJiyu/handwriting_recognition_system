@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Tabs, Upload, Card, Tag, Alert, Row, Col } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tabs, Upload, Card, Tag, Alert, Row, Col, Popconfirm } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { PlusOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined, ExportOutlined, PlusCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined, ExportOutlined, PlusCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 
@@ -34,12 +34,13 @@ const UserManagement: React.FC = () => {
 
   // 状态
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'create' | 'batch' | 'import'>('create');
+  const [modalType, setModalType] = useState<'create' | 'batch' | 'import' | 'edit'>('create');
   const [selectedSchool, setSelectedSchool] = useState<number | undefined>();
   const [activeTab, setActiveTab] = useState('students');
   const [form] = Form.useForm();
   const [batchForm] = Form.useForm();
   const [fileList, setFileList] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<Student | null>(null);
 
   // 获取用户列表
   const { data: users, isLoading } = useQuery<Student[]>({
@@ -81,10 +82,44 @@ const UserManagement: React.FC = () => {
     onSuccess: () => {
       message.success('创建成功');
       setModalVisible(false);
+      setSelectedUser(null);
+      form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: () => {
       message.error('创建失败');
+    },
+  });
+
+  // 更新用户
+  const updateMutation = useMutation({
+    mutationFn: async ({ userId, values }: { userId: number; values: any }) => {
+      const res = await api.put(`/users/${userId}`, values);
+      return res.data;
+    },
+    onSuccess: () => {
+      message.success('更新成功');
+      setModalVisible(false);
+      setSelectedUser(null);
+      form.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: () => {
+      message.error('更新失败');
+    },
+  });
+
+  // 删除用户
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await api.delete(`/users/${userId}`);
+    },
+    onSuccess: () => {
+      message.success('删除成功');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '删除失败');
     },
   });
 
@@ -145,6 +180,36 @@ const UserManagement: React.FC = () => {
       message.success('模板下载成功');
     } catch (error) {
       message.error('模板下载失败');
+    }
+  };
+
+  // 处理编辑用户
+  const handleEditUser = (user: Student) => {
+    setSelectedUser(user);
+    setModalType('edit');
+    setModalVisible(true);
+    form.setFieldsValue({
+      username: user.username,
+      nickname: user.nickname,
+      role: user.role,
+      school_id: user.school_id,
+    });
+  };
+
+  // 处理创建用户（清空表单）
+  const handleCreateUser = () => {
+    setSelectedUser(null);
+    setModalType('create');
+    setModalVisible(true);
+    form.resetFields();
+  };
+
+  // 处理提交（创建或更新）
+  const handleSubmit = (values: any) => {
+    if (selectedUser) {
+      updateMutation.mutate({ userId: selectedUser.id, values });
+    } else {
+      createMutation.mutate(values);
     }
   };
 
@@ -264,6 +329,41 @@ const UserManagement: React.FC = () => {
         }
       },
     },
+    {
+      title: '操作',
+      key: 'action',
+      width: 150,
+      render: (_: any, record: Student) => {
+        const canEdit = user?.role === 'system_admin' ||
+                         (user?.role === 'school_admin' && user.school_id === record.school_id);
+        const canDelete = user?.role === 'system_admin';
+        return (
+          <Space size="small">
+            {canEdit && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleEditUser(record)}
+              >
+                编辑
+              </Button>
+            )}
+            {canDelete && (
+              <Popconfirm
+                title="确定要删除这个用户吗？"
+                onConfirm={() => deleteMutation.mutate(record.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button type="link" danger size="small">
+                  删除
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
+    },
   ];
 
   return (
@@ -295,13 +395,21 @@ const UserManagement: React.FC = () => {
       {/* 操作按钮 */}
       <Card style={{ marginBottom: 16 }}>
         <Space size="large">
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateUser}>
             创建用户
           </Button>
-          <Button icon={<PlusCircleOutlined />} onClick={() => setModalVisible(true)}>
+          <Button icon={<PlusCircleOutlined />} onClick={() => {
+            setSelectedUser(null);
+            setModalType('batch');
+            setModalVisible(true);
+          }}>
             批量创建学生
           </Button>
-          <Button icon={<UploadOutlined />} onClick={() => setModalVisible(true)}>
+          <Button icon={<UploadOutlined />} onClick={() => {
+            setSelectedUser(null);
+            setModalType('import');
+            setModalVisible(true);
+          }}>
             导入学生名单
           </Button>
           <Button icon={<FileExcelOutlined />} onClick={downloadTemplate}>
@@ -328,12 +436,13 @@ const UserManagement: React.FC = () => {
         />
       </Card>
 
-      {/* 创建/批量创建/导入 模态框 */}
+      {/* 创建/批量创建/导入/编辑 模态框 */}
       <Modal
-        title={modalType === 'batch' ? '批量创建学生' : modalType === 'import' ? '导入学生名单' : '创建用户'}
+        title={modalType === 'batch' ? '批量创建学生' : modalType === 'import' ? '导入学生名单' : modalType === 'edit' ? '编辑用户' : '创建用户'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
+          setSelectedUser(null);
           form.resetFields();
           batchForm.resetFields();
           setFileList([]);
@@ -342,6 +451,7 @@ const UserManagement: React.FC = () => {
         footer={[
           <Button key="cancel" onClick={() => {
             setModalVisible(false);
+            setSelectedUser(null);
             form.resetFields();
             batchForm.resetFields();
             setFileList([]);
@@ -366,31 +476,35 @@ const UserManagement: React.FC = () => {
               key="submit"
               type="primary"
               onClick={() => modalType === 'batch' ? handleBatchSubmit() : form.submit()}
-              loading={createMutation.isPending || batchCreateMutation.isPending}
+              loading={createMutation.isPending || updateMutation.isPending || batchCreateMutation.isPending}
             >
-              确定
+              {modalType === 'edit' ? '更新' : '确定'}
             </Button>
           ),
         ]}
       >
-        <Tabs activeKey={modalType} onChange={setModalType}>
+        <Tabs activeKey={modalType === 'edit' ? 'create' : modalType} onChange={(key) => {
+          if (key !== 'edit') {
+            setModalType(key as any);
+          }
+        }}>
           <TabPane tabKey="create" key="create">
             <Form
               form={form}
               layout="vertical"
-              onFinish={(values) => createMutation.mutate(values)}
+              onFinish={handleSubmit}
             >
               <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-                <Input />
+                <Input disabled={modalType === 'edit'} />
               </Form.Item>
-              <Form.Item name="password" label="密码" rules={[{ required: true }]}>
-                <Input.Password />
+              <Form.Item name="password" label="密码" rules={modalType === 'edit' ? [] : [{ required: true }]}>
+                <Input.Password placeholder={modalType === 'edit' ? '留空则不修改密码' : ''} />
               </Form.Item>
               <Form.Item name="nickname" label="昵称（学生姓名）">
                 <Input />
               </Form.Item>
               <Form.Item name="role" label="角色" rules={[{ required: true }]}>
-                <Select>
+                <Select disabled={modalType === 'edit'}>
                   <Select.Option value="student">学生</Select.Option>
                   <Select.Option value="teacher">教师</Select.Option>
                   {user?.role === 'system_admin' && (

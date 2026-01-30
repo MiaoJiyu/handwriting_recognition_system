@@ -22,7 +22,7 @@ class FeatureFusion:
         pca_save_path: str = None
     ):
         # 禁用ImageNet预训练，因为预训练模型不是为字迹识别训练的
-        self.deep_extractor = deep_extractor or DeepFeatureExtractor(model_manager=ModelManager("./models", use_imagenet_pretrained=False))
+        self.deep_extractor = deep_extractor or DeepFeatureExtractor()
         self.traditional_extractor = traditional_extractor or TraditionalFeatureExtractor()
         self.use_pca = use_pca
         self.pca_dim = pca_dim

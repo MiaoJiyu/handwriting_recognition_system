@@ -2,7 +2,7 @@
 
 一个基于Few-shot Learning的字迹识别系统，用于识别作业上的字迹归属。
 
-> 📖 **详细开发指南**: 请参阅 [DEVELOPMENT.md](./DEVELOPMENT.md) 获取完整的开发文档。
+> 📖 **详细开发指南**: 请参阅 [DEVELOPMENT.md](./docs/DEVELOPMENT.md) 获取完整的开发文档。
 
 ## 项目结构
 

@@ -17,6 +17,7 @@ interface ImageCropperProps {
   onCrop: (cropArea: CropArea) => void;
   onCancel: () => void;
   title?: string;
+  initialCropArea?: CropArea;  // 新增：初始裁剪区域
 }
 
 const ImageCropper: React.FC<ImageCropperProps> = ({
@@ -25,6 +26,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   onCrop,
   onCancel,
   title = '裁剪图片',
+  initialCropArea,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,15 +46,21 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         setImage(img);
-        // 初始化裁剪区域为图片中心
-        const cropWidth = Math.min(img.width * 0.5, 300);
-        const cropHeight = Math.min(img.height * 0.5, 200);
-        setCropArea({
-          x: (img.width - cropWidth) / 2,
-          y: (img.height - cropHeight) / 2,
-          width: cropWidth,
-          height: cropHeight,
-        });
+
+        // 如果提供了初始裁剪区域，使用它；否则初始化为图片中心
+        if (initialCropArea) {
+          setCropArea(initialCropArea);
+        } else {
+          const cropWidth = Math.min(img.width * 0.5, 300);
+          const cropHeight = Math.min(img.height * 0.5, 200);
+          setCropArea({
+            x: (img.width - cropWidth) / 2,
+            y: (img.height - cropHeight) / 2,
+            width: cropWidth,
+            height: cropHeight,
+          });
+        }
+
         // 计算合适的缩放比例
         if (containerRef.current) {
           const containerWidth = containerRef.current.clientWidth - 40;
@@ -64,7 +72,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       };
       img.src = imageUrl;
     }
-  }, [visible, imageUrl]);
+  }, [visible, imageUrl, initialCropArea]);
 
   // 绘制画布
   const draw = useCallback(() => {

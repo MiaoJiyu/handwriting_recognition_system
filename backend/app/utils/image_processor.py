@@ -166,36 +166,44 @@ class ImageProcessor:
             if image is None:
                 print(f"无法读取图像: {image_path}")
                 return None
-            
+
             height, width = image.shape[:2]
-            
+
             # 确保边界框在图像范围内
             x = max(0, bbox['x'])
             y = max(0, bbox['y'])
             w = min(bbox['width'], width - x)
             h = min(bbox['height'], height - y)
-            
+
             if w <= 0 or h <= 0:
                 print("无效的边界框尺寸")
                 return None
-            
+
             # 裁剪图像
             cropped = image[y:y+h, x:x+w]
-            
+
             # 生成输出路径
             if not output_path:
                 base_name = os.path.splitext(os.path.basename(image_path))[0]
                 output_dir = os.path.join(settings.UPLOAD_DIR, 'cropped')
                 os.makedirs(output_dir, exist_ok=True)
                 output_path = os.path.join(output_dir, f"{base_name}_cropped.jpg")
-            
+
             # 保存裁剪后的图像
             cv2.imwrite(output_path, cropped)
-            
+
             return output_path
         except Exception as e:
             print(f"裁剪图像失败: {str(e)}")
             return None
+
+    def crop_image_by_bbox(self, image_path: str, bbox: Dict, sample_id: int) -> Tuple[Optional[Dict], Optional[str]]:
+        """
+        根据给定的边界框裁剪图像
+        返回: (边界框, 裁剪后的图像路径)
+        """
+        cropped_path = self.crop_image(image_path, bbox)
+        return bbox, cropped_path
     
     def auto_crop_sample(self, image_path: str, sample_id: int) -> Tuple[Optional[Dict], Optional[str]]:
         """
@@ -236,9 +244,15 @@ class ImageProcessor:
 image_processor = ImageProcessor()
 
 
-def auto_crop_sample_image(image_path: str, sample_id: int) -> Tuple[Optional[Dict], Optional[str]]:
+def auto_crop_sample_image(image_path: str, sample_id: int, bbox: Optional[Dict] = None) -> Tuple[Optional[Dict], Optional[str]]:
     """
-    自动裁剪样本图像的便捷函数
+    裁剪样本图像的便捷函数
+    如果提供了bbox，使用给定的裁剪区域；否则自动检测
     返回: (边界框, 裁剪后的图像路径)
     """
-    return image_processor.auto_crop_sample(image_path, sample_id)
+    if bbox:
+        # 使用给定的裁剪区域
+        return image_processor.crop_image_by_bbox(image_path, bbox, sample_id)
+    else:
+        # 自动检测裁剪区域
+        return image_processor.auto_crop_sample(image_path, sample_id)

@@ -100,18 +100,114 @@ async def list_users(
 ):
     """列出用户"""
     query = db.query(User)
-    
+
     # 学校管理员只能查看本校用户
     if current_user.role == UserRole.SCHOOL_ADMIN:
         query = query.filter(User.school_id == current_user.school_id)
     elif school_id:
         query = query.filter(User.school_id == school_id)
-    
+
     if role:
         query = query.filter(User.role == role)
-    
+
     users = query.all()
     return users
+
+
+@router.get("/template", status_code=status.HTTP_200_OK)
+async def download_student_template():
+    """下载学生名单模板（Excel格式）"""
+    import io
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+
+    # 创建工作簿
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "学生名单模板"
+
+    # 添加表头
+    headers = ["学号", "姓名(昵称)", "密码"]
+    ws.append(headers)
+
+    # 添加示例数据
+    example_data = [
+        ["2024001", "张三", "123456"],
+        ["2024002", "李四", "123456"],
+        ["2024003", "王五", "123456"],
+    ]
+    for row in example_data:
+        ws.append(row)
+
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=student_template.xlsx"}
+    )
+
+
+@router.get("/export", status_code=status.HTTP_200_OK)
+async def export_students(
+    school_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_school_admin_or_above)
+):
+    """导出学生名单（Excel格式）"""
+    import io
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+
+    # 构建查询
+    query = db.query(User).filter(User.role == UserRole.STUDENT)
+
+    # 权限控制
+    if current_user.role == UserRole.SCHOOL_ADMIN:
+        if school_id:
+            query = query.filter(User.school_id == school_id)
+        else:
+            query = query.filter(User.school_id == current_user.school_id)
+    elif school_id:
+        query = query.filter(User.school_id == school_id)
+
+    students = query.all()
+
+    # 创建工作簿
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "学生名单"
+
+    # 添加表头
+    headers = ["学号", "姓名(昵称)", "角色", "学校ID", "创建时间"]
+    ws.append(headers)
+
+    # 添加数据
+    for student in students:
+        row = [
+            student.username,
+            student.nickname or '-',
+            student.role.value,
+            student.school_id,
+            student.created_at.strftime("%Y-%m-%d %H:%M")
+        ]
+        ws.append(row)
+
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"students_{current_user.school_id if current_user.school_id else 'all'}_{current_user.id}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -311,43 +407,6 @@ async def batch_create_students(
     )
 
 
-@router.get("/template", status_code=status.HTTP_200_OK)
-async def download_student_template():
-    """下载学生名单模板（Excel格式）"""
-    import io
-    import openpyxl
-    from fastapi.responses import StreamingResponse
-
-    # 创建工作簿
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "学生名单模板"
-
-    # 添加表头
-    headers = ["学号", "姓名(昵称)", "密码"]
-    ws.append(headers)
-
-    # 添加示例数据
-    example_data = [
-        ["2024001", "张三", "123456"],
-        ["2024002", "李四", "123456"],
-        ["2024003", "王五", "123456"],
-    ]
-    for row in example_data:
-        ws.append(row)
-
-    # 保存到内存
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=student_template.xlsx"}
-    )
-
-
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 async def import_students(
     db: Session = Depends(get_db),
@@ -362,65 +421,6 @@ async def import_students(
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="请使用前端导入功能上传Excel文件"
-    )
-
-
-@router.get("/export", status_code=status.HTTP_200_OK)
-async def export_students(
-    school_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
-):
-    """导出学生名单（Excel格式）"""
-    import io
-    import openpyxl
-    from fastapi.responses import StreamingResponse
-
-    # 构建查询
-    query = db.query(User).filter(User.role == UserRole.STUDENT)
-
-    # 权限控制
-    if current_user.role == UserRole.SCHOOL_ADMIN:
-        if school_id:
-            query = query.filter(User.school_id == school_id)
-        else:
-            query = query.filter(User.school_id == current_user.school_id)
-    elif school_id:
-        query = query.filter(User.school_id == school_id)
-
-    students = query.all()
-
-    # 创建工作簿
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "学生名单"
-
-    # 添加表头
-    headers = ["学号", "姓名(昵称)", "角色", "学校ID", "创建时间"]
-    ws.append(headers)
-
-    # 添加数据
-    for student in students:
-        row = [
-            student.username,
-            student.nickname or '-',
-            student.role.value,
-            student.school_id,
-            student.created_at.strftime("%Y-%m-%d %H:%M")
-        ]
-        ws.append(row)
-
-    # 保存到内存
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-
-    filename = f"students_{current_user.school_id if current_user.school_id else 'all'}_{current_user.id}.xlsx"
-
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 

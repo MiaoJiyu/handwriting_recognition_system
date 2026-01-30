@@ -29,19 +29,18 @@ class HandwritingDataset(Dataset):
         sample = self.samples[idx]
         image_path = sample["image_path"]
         user_id = sample["user_id"]
-        annotation = sample.get("annotation_data")
-        separation_mode = sample.get("separation_mode", "auto")
-        
-        # 预处理图片
+        separation_mode = sample.get("separation_mode", "none")
+
+        # 预处理图片（已裁剪的图片直接加载，不做区域分离）
         processed_image, _ = self.image_processor.process_sample(
             image_path,
             separation_mode=separation_mode,
-            annotation=annotation
+            annotation=None  # 已裁剪的图片不需要annotation
         )
-        
+
         # 转换为tensor
         image_tensor = torch.from_numpy(processed_image).permute(2, 0, 1).float()
-        
+
         return image_tensor, user_id
 
 
@@ -75,41 +74,44 @@ class Trainer:
             from sqlalchemy.orm import sessionmaker
             from sqlalchemy import text
             from core.config import settings
-            
+
             engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
             SessionLocal = sessionmaker(bind=engine)
             db = SessionLocal()
-            
-            # 查询已处理的样本（使用SQL直接查询）
+
+            # 查询已处理的样本（优先使用裁剪后的图片）
             result_set = db.execute(text("""
                 SELECT s.id, s.user_id, s.image_path, s.extracted_region_path, s.status
                 FROM samples s
                 WHERE s.status = 'PROCESSED'
             """))
-            
+
             result = []
             for row in result_set:
                 sample_id = row[0]
-                # 获取区域信息
+
+                # 优先使用已裁剪的图片路径
+                image_path = row[3] or row[2]  # extracted_region_path 优先
+
+                # 获取区域信息（用于fallback）
                 region_result = db.execute(
                     text("SELECT bbox FROM sample_regions WHERE sample_id = :sample_id LIMIT 1"),
                     {"sample_id": sample_id}
                 ).first()
-                
+
                 annotation_data = None
                 if region_result:
                     import json
                     annotation_data = {"bbox": json.loads(region_result[0])}
-                
+
                 result.append({
                     "id": sample_id,
                     "user_id": row[1],
-                    "image_path": row[2],
-                    "extracted_region_path": row[3],
+                    "image_path": image_path,
                     "annotation_data": annotation_data,
-                    "separation_mode": "auto"
+                    "separation_mode": "none"  # 已裁剪图片不需要再分离
                 })
-            
+
             db.close()
             return result
         except Exception as e:
@@ -267,22 +269,24 @@ class Trainer:
         # 计算所有样本对之间的距离
         n = features.size(0)
         if n < 2:
-            return torch.tensor(0.0, device=device)
+            # 返回一个需要梯度的零张量
+            return features.mean() * 0.0
 
         # 计算所有样本对之间的欧氏距离矩阵
         dist_matrix = torch.cdist(features, features)
 
         # 创建标签矩阵：如果两个样本是同一用户，则为1，否则为0
         labels = user_ids.unsqueeze(1) == user_ids.unsqueeze(0)
+        labels = labels.float()
 
         # 计算正样本对距离和负样本对距离
-        mask_positive = labels.float()
-        mask_negative = (~labels).float()
+        mask_positive = labels.clone()
+        mask_negative = 1.0 - labels
 
         # 避免自比较（对角线）
-        mask = torch.eye(n, device=device).bool()
-        mask_positive[mask] = 0
-        mask_negative[mask] = 0
+        mask_eye = torch.eye(n, device=device)
+        mask_positive = mask_positive * (1.0 - mask_eye)
+        mask_negative = mask_negative * (1.0 - mask_eye)
 
         # 正样本对距离（同一用户的不同样本）
         pos_dist = (dist_matrix * mask_positive).sum() / (mask_positive.sum() + 1e-7)
@@ -292,11 +296,11 @@ class Trainer:
 
         # Contrastive loss: L = (1-y) * 0.5 * d^2 + y * 0.5 * max(0, margin - d)^2
         margin = 1.0
-        loss = (1 - mask_positive) * 0.5 * dist_matrix ** 2 + \
-                mask_positive * 0.5 * torch.clamp(margin - dist_matrix, min=0) ** 2
+        loss = (1.0 - labels) * 0.5 * dist_matrix ** 2 + \
+                labels * 0.5 * torch.clamp(margin - dist_matrix, min=0) ** 2
 
         # 移除对角线（自比较）
-        loss = loss * ~torch.eye(n, device=device).bool()
+        loss = loss * (1.0 - mask_eye)
 
         return loss.mean()
     
@@ -337,10 +341,11 @@ class Trainer:
             all_training_images = []
             for user_sample_list in user_samples.values():
                 for sample in user_sample_list:
+                    # 使用已裁剪的图片（image_path已经是cropped path）
                     processed_image, _ = self.image_processor.process_sample(
                         sample["image_path"],
-                        separation_mode=sample.get("separation_mode", "auto"),
-                        annotation=sample.get("annotation_data")
+                        separation_mode="none",  # 已裁剪的图片不需要再分离
+                        annotation=None
                     )
                     all_training_images.append(processed_image)
 
@@ -364,10 +369,11 @@ class Trainer:
                     # 批量预处理该用户的所有样本
                     processed_images = []
                     for sample in user_sample_list:
+                        # 使用已裁剪的图片（image_path已经是cropped path）
                         processed_image, _ = self.image_processor.process_sample(
                             sample["image_path"],
-                            separation_mode=sample.get("separation_mode", "auto"),
-                            annotation=sample.get("annotation_data")
+                            separation_mode="none",  # 已裁剪的图片不需要再分离
+                            annotation=None
                         )
                         processed_images.append(processed_image)
 
@@ -489,10 +495,11 @@ class Trainer:
             # 提取新样本的特征
             processed_images = []
             for sample in new_samples:
+                # 使用已裁剪的图片（image_path应该是cropped path）
                 processed_image, _ = self.image_processor.process_sample(
                     sample["image_path"],
-                    separation_mode=sample.get("separation_mode", "auto"),
-                    annotation=sample.get("annotation_data")
+                    separation_mode="none",  # 已裁剪的图片不需要再分离
+                    annotation=None
                 )
                 processed_images.append(processed_image)
 

@@ -378,14 +378,36 @@ async def crop_sample_region(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="样本不存在"
         )
-    
-    # 创建区域记录
-    region = SampleRegion(
-        sample_id=sample_id,
-        bbox=json.dumps(crop_data.bbox),
-        is_auto_detected=0  # 手动标注
-    )
-    db.add(region)
+
+    # 查找是否已存在手动标注的区域
+    existing_region = db.query(SampleRegion).filter(
+        SampleRegion.sample_id == sample_id,
+        SampleRegion.is_auto_detected == 0  # 只查找手动标注的
+    ).first()
+
+    bbox_json = json.dumps(crop_data.bbox)
+
+    if existing_region:
+        # 更新现有的手动标注区域
+        existing_region.bbox = bbox_json
+        db.flush()
+        region = existing_region
+    else:
+        # 创建新的区域记录
+        region = SampleRegion(
+            sample_id=sample_id,
+            bbox=bbox_json,
+            is_auto_detected=0  # 手动标注
+        )
+        db.add(region)
+
+    # 裁剪图片并保存
+    try:
+        cropped_path = auto_crop_sample_image(sample.image_path, sample_id, crop_data.bbox)
+        if cropped_path:
+            sample.extracted_region_path = cropped_path
+    except Exception as e:
+        print(f"裁剪图片失败: {str(e)}")
 
     # 裁剪/标注完成后，将样本标记为已处理，供训练服务读取
     sample.status = SampleStatus.PROCESSED

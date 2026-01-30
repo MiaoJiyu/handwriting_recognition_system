@@ -103,6 +103,11 @@ const Recognition: React.FC = () => {
     },
   ];
 
+  // 点击用户名展示该用户的历史图片
+  const handleUsernameClick = (userId: number, username: string) => {
+    window.open(`/sample-list?user_id=${userId}&username=${username}`, '_blank');
+  };
+
   return (
     <div>
       <h1>字迹识别</h1>
