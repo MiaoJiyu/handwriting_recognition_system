@@ -6,7 +6,7 @@ from datetime import datetime
 from ..core.database import get_db
 from ..models.training_job import TrainingJob, TrainingJobStatus
 from ..models.model import Model
-from ..utils.dependencies import require_teacher_or_above, get_current_user
+from ..utils.dependencies import require_teacher_or_above, get_current_user, CurrentUserResponse
 import grpc
 from ..services.inference_client import InferenceClient
 
@@ -35,7 +35,7 @@ class TrainingJobCreate(BaseModel):
 async def start_training(
     training_data: TrainingJobCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher_or_above)
+    current_user: CurrentUserResponse = Depends(require_teacher_or_above)
 ):
     """启动训练任务"""
     from ..models.sample import Sample, SampleStatus

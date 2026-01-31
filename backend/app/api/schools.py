@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from ..core.database import get_db
 from ..models.school import School
-from ..utils.dependencies import require_system_admin
+from ..utils.dependencies import require_system_admin, CurrentUserResponse
 
 router = APIRouter(prefix="/api/schools", tags=["学校管理"])
 
@@ -26,7 +26,7 @@ class SchoolResponse(BaseModel):
 async def create_school(
     school_data: SchoolCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """创建学校（仅系统管理员）"""
     existing = db.query(School).filter(School.name == school_data.name).first()
@@ -46,7 +46,7 @@ async def create_school(
 @router.get("", response_model=List[SchoolResponse])
 async def list_schools(
     db: Session = Depends(get_db),
-    current_user = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """列出所有学校"""
     schools = db.query(School).all()

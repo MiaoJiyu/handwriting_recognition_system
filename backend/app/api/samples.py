@@ -11,7 +11,7 @@ from ..core.database import get_db
 from ..core.config import settings
 from ..models.sample import Sample, SampleStatus, SampleRegion
 from ..models.user import User
-from ..utils.dependencies import get_current_user, require_teacher_or_above
+from ..utils.dependencies import get_current_user, require_teacher_or_above, CurrentUserResponse
 from ..utils.image_processor import auto_crop_sample_image
 
 router = APIRouter(prefix="/api/samples", tags=["样本管理"])
@@ -73,7 +73,7 @@ async def upload_sample(
     file: UploadFile = File(...),
     student_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """上传样本图片"""
     # 验证文件类型
@@ -101,7 +101,7 @@ async def upload_sample(
     # 如果提供了student_id，验证权限并获取目标用户
     if student_id:
         # 只有教师及以上权限才能为其他用户上传样本
-        if current_user.role.value not in ["teacher", "school_admin", "system_admin"]:
+        if current_user.role not in ["teacher", "school_admin", "system_admin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权为其他用户上传样本"
@@ -124,7 +124,7 @@ async def upload_sample(
             )
         
         # 学校管理员只能为同校用户上传样本
-        if current_user.role.value == "school_admin" and current_user.school_id != target_user.school_id:
+        if current_user.role == "school_admin" and current_user.school_id != target_user.school_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="只能为同校用户上传样本"
@@ -223,13 +223,13 @@ async def list_samples(
     status: Optional[SampleStatus] = None,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """获取样本列表"""
     query = db.query(Sample).options(joinedload(Sample.user))
 
     # 权限控制：学生只能查看自己的样本
-    if current_user.role.value == "student":
+    if current_user.role == "student":
         query = query.filter(Sample.user_id == current_user.id)
     elif user_id:
         query = query.filter(Sample.user_id == user_id)
@@ -251,7 +251,7 @@ async def list_samples(
                 id=s.user.id,
                 username=s.user.username,
                 nickname=s.user.nickname,
-                role=s.user.role.value
+                role=str(s.user.role)
             )
 
         resp.append(
@@ -277,7 +277,7 @@ async def get_sample(
     request: Request,
     sample_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """获取样本详情"""
     sample = db.query(Sample).options(joinedload(Sample.user)).filter(Sample.id == sample_id).first()
@@ -288,7 +288,7 @@ async def get_sample(
         )
 
     # 权限检查
-    if current_user.role.value == "student" and sample.user_id != current_user.id:
+    if current_user.role == "student" and sample.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权查看其他用户的样本"
@@ -304,7 +304,7 @@ async def get_sample(
             id=sample.user.id,
             username=sample.user.username,
             nickname=sample.user.nickname,
-            role=sample.user.role.value
+            role=str(sample.user.role)
         )
 
     return SampleDetailResponse(
@@ -336,7 +336,7 @@ async def get_sample(
 async def delete_sample(
     sample_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """删除样本"""
     sample = db.query(Sample).filter(Sample.id == sample_id).first()
@@ -347,7 +347,7 @@ async def delete_sample(
         )
     
     # 权限检查
-    if current_user.role.value == "student" and sample.user_id != current_user.id:
+    if current_user.role == "student" and sample.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权删除其他用户的样本"
@@ -369,7 +369,7 @@ async def crop_sample_region(
     sample_id: int,
     crop_data: CropRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_above)
+    current_user: CurrentUserResponse = Depends(require_teacher_or_above)
 ):
     """手动裁剪手写区域"""
     sample = db.query(Sample).filter(Sample.id == sample_id).first()

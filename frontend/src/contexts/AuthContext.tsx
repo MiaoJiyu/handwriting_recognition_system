@@ -7,6 +7,8 @@ interface User {
   nickname: string | null;  // 添加昵称字段
   role: string;
   school_id: number | null;
+  is_switched?: boolean;  // 是否为切换后的用户
+  original_user_id?: number;  // 原始管理员用户ID
 }
 
 interface AuthContextType {
@@ -14,6 +16,7 @@ interface AuthContextType {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, fetchUser }}>
       {children}
     </AuthContext.Provider>
   );

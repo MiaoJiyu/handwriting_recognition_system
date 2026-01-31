@@ -6,7 +6,7 @@ from datetime import datetime
 from ..core.database import get_db
 from ..models.school import School
 from ..models.user import User
-from ..utils.dependencies import require_system_admin, require_school_admin_or_above
+from ..utils.dependencies import require_system_admin, require_school_admin_or_above, CurrentUserResponse
 
 router = APIRouter(prefix="/api/schools", tags=["学校管理"])
 
@@ -40,7 +40,7 @@ class SchoolWithUsersResponse(SchoolResponse):
 async def create_school(
     school_data: SchoolCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """创建学校（仅系统管理员）"""
     existing = db.query(School).filter(School.name == school_data.name).first()
@@ -60,7 +60,7 @@ async def create_school(
 @router.get("", response_model=List[SchoolWithUsersResponse])
 async def list_schools(
     db: Session = Depends(get_db),
-    current_user = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """列出所有学校（包含用户统计）"""
     schools = db.query(School).all()
@@ -90,7 +90,7 @@ async def list_schools(
 async def get_school(
     school_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """获取学校详情"""
     school = db.query(School).filter(School.id == school_id).first()
@@ -101,7 +101,7 @@ async def get_school(
         )
 
     # 权限检查：学校管理员只能查看本校信息
-    if current_user.role.value == "school_admin" and school.id != current_user.school_id:
+    if current_user.role == "school_admin" and school.id != current_user.school_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="无权查看其他学校信息"
@@ -129,7 +129,7 @@ async def update_school(
     school_id: int,
     school_data: SchoolUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """更新学校信息（仅系统管理员）"""
     school = db.query(School).filter(School.id == school_id).first()
@@ -161,7 +161,7 @@ async def update_school(
 async def delete_school(
     school_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """删除学校（仅系统管理员）"""
     school = db.query(School).filter(School.id == school_id).first()

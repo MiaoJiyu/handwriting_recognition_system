@@ -5,17 +5,28 @@ import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<{ type: 'error' | 'warning' | 'info'; message: string } | null>(null);
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const onFinish = async (values: { username: string; password: string }) => {
+    // 如果有错误提示，不允许提交
+    if (error) {
+      return;
+    }
+
     setLoading(true);
     try {
       await login(values.username, values.password);
       message.success('登录成功');
       navigate('/');
     } catch (error: any) {
-      message.error(error.response?.data?.detail || '登录失败');
+      // 解析错误信息并设置友好的提示
+      const errorMessage = error.response?.data?.detail || '登录失败';
+      setError({
+        type: 'error',
+        message: errorMessage
+      });
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Table, Button, Image, Popconfirm, message, Space, Card, Row, Col, Tag, Segmented, Tooltip } from 'antd';
+import React, { useState } from 'react';
+import { Table, Button, Image, Popconfirm, message, Space, Card, Row, Col, Tag, Segmented } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { DeleteOutlined, ScissorOutlined, AppstoreOutlined, UnorderedListOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, ScissorOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import ImageCropper from '../components/ImageCropper';
 
 // 辅助函数：将后端返回的 image_path 转换为可访问的 URL
@@ -122,7 +122,7 @@ const SampleList: React.FC = () => {
       try {
         // 优先查找手动标注的区域（is_auto_detected === 0）
         const manualRegion = sampleDetail.sample_regions.find(
-          region => region.is_auto_detected === 0
+          (region: any) => region.is_auto_detected === 0
         );
         if (manualRegion) {
           const bbox = JSON.parse(manualRegion.bbox);
@@ -201,14 +201,12 @@ const SampleList: React.FC = () => {
       key: 'original_filename',
       render: (filename: string, record: Sample) => (
         <a onClick={() => {
-          const url = record.image_url || getImageUrl(record.image_path);
-          const img = new Image();
-          img.src = url;
-          img.onload = () => {
-            const width = Math.min(img.width, 800);
-            const height = Math.min(img.height, 600);
-            const win = window.open('', '_blank');
-            if (win) {
+        const url = record.image_url || getImageUrl(record.image_path);
+        const img = window.document.createElement('img');
+        img.src = url;
+        img.onload = () => {
+          const win = window.open('', '_blank');
+          if (win) {
               win.document.write(`
                 <html>
                   <head><title>${filename}</title></head>
@@ -374,7 +372,7 @@ const SampleList: React.FC = () => {
             setSelectedSample(null);
           }}
           title={`裁剪图片 - ${currentSample.original_filename}`}
-          initialCropArea={getSavedCropArea()}
+          initialCropArea={getSavedCropArea() || undefined}
         />
       )}
     </div>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, Select, message, Space, Tabs, Upload, Card, Tag, Alert, Row, Col, Popconfirm } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, message, Space, Tabs, Upload, Card, Tag, Alert, Popconfirm, Divider } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { PlusOutlined, DownloadOutlined, UploadOutlined, FileExcelOutlined, ExportOutlined, PlusCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, FileExcelOutlined, ExportOutlined, PlusCircleOutlined, DeleteOutlined, LockOutlined, SwapOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 
@@ -15,6 +15,7 @@ interface Student {
   role: string;
   school_id: number | null;
   created_at: string;
+  switched_user_id?: number | null;
 }
 
 interface School {
@@ -26,21 +27,29 @@ interface BatchStudentData {
   username: string;
   nickname: string;
   password?: string;
+  school_id?: number;
 }
 
 const UserManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
   const queryClient = useQueryClient();
 
   // 状态
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'create' | 'batch' | 'import' | 'edit'>('create');
+  const [modalType, setModalType] = useState<'create' | 'batch' | 'import' | 'edit' | 'password'>('create');
   const [selectedSchool, setSelectedSchool] = useState<number | undefined>();
-  const [activeTab, setActiveTab] = useState('students');
   const [form] = Form.useForm();
   const [batchForm] = Form.useForm();
   const [fileList, setFileList] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<Student | null>(null);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [exportFilters, setExportFilters] = useState<{
+    school_id?: number;
+    role?: string;
+  }>({});
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [switchModalVisible, setSwitchModalVisible] = useState(false);
+  const [switchTargetUser, setSwitchTargetUser] = useState<Student | null>(null);
 
   // 获取用户列表
   const { data: users, isLoading } = useQuery<Student[]>({
@@ -116,10 +125,42 @@ const UserManagement: React.FC = () => {
     },
     onSuccess: () => {
       message.success('删除成功');
+      setSelectedRowKeys([]);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: any) => {
       message.error(error.response?.data?.detail || '删除失败');
+    },
+  });
+
+  // 批量删除用户
+  const batchDeleteMutation = useMutation({
+    mutationFn: async (userIds: number[]) => {
+      await Promise.all(userIds.map(id => api.delete(`/users/${id}`)));
+    },
+    onSuccess: () => {
+      message.success(`成功删除 ${selectedRowKeys.length} 个用户`);
+      setSelectedRowKeys([]);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: () => {
+      message.error('批量删除失败');
+    },
+  });
+
+  // 修改密码
+  const changePasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: number; password: string }) => {
+      await api.put(`/users/${userId}`, { password });
+    },
+    onSuccess: () => {
+      message.success('密码修改成功');
+      setModalVisible(false);
+      setSelectedUser(null);
+      form.resetFields();
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '密码修改失败');
     },
   });
 
@@ -132,8 +173,9 @@ const UserManagement: React.FC = () => {
     onSuccess: (data: any) => {
       message.success(`批量创建完成！成功：${data.success}，失败：${data.failed}`);
       setModalVisible(false);
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setSelectedUser(null);
       batchForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: any) => {
       message.error(`批量创建失败：${error.response?.data?.detail || error.message}`);
@@ -142,14 +184,15 @@ const UserManagement: React.FC = () => {
 
   // 导出学生名单
   const exportMutation = useMutation({
-    mutationFn: async () => {
-      const schoolId = selectedSchool || (user?.role === 'school_admin' ? user.school_id : undefined);
-      const url = schoolId ? `/users/export?school_id=${schoolId}` : '/users/export';
+    mutationFn: async (filters: { school_id?: number; role?: string }) => {
+      const params = new URLSearchParams();
+      if (filters.school_id) params.append('school_id', filters.school_id.toString());
+      if (filters.role) params.append('role', filters.role);
+      const url = `/users/export${params.toString() ? '?' + params.toString() : ''}`;
       const res = await api.get(url, { responseType: 'blob' });
       return res.data;
     },
     onSuccess: (data: Blob) => {
-      // 下载文件
       const url = window.URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -159,6 +202,7 @@ const UserManagement: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       message.success('导出成功');
+      setExportModalVisible(false);
     },
     onError: () => {
       message.error('导出失败');
@@ -184,16 +228,24 @@ const UserManagement: React.FC = () => {
   };
 
   // 处理编辑用户
-  const handleEditUser = (user: Student) => {
-    setSelectedUser(user);
+  const handleEditUser = (record: Student) => {
+    setSelectedUser(record);
     setModalType('edit');
     setModalVisible(true);
     form.setFieldsValue({
-      username: user.username,
-      nickname: user.nickname,
-      role: user.role,
-      school_id: user.school_id,
+      username: record.username,
+      nickname: record.nickname,
+      role: record.role,
+      school_id: record.school_id,
     });
+  };
+
+  // 处理修改密码
+  const handleChangePassword = (record: Student) => {
+    setSelectedUser(record);
+    setModalType('password');
+    setModalVisible(true);
+    form.resetFields();
   };
 
   // 处理创建用户（清空表单）
@@ -213,14 +265,13 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  // 手动添加学生（在批量创建表单中）
-  const handleAddStudent = () => {
-    const students = batchForm.getFieldValue('students') || [];
-    batchForm.setFieldValue('students', [
-      ...students,
-      { username: '', nickname: '', password: '' },
-    ]);
+  // 处理批量创建提交
+  const handleBatchSubmit = () => {
+    const values = batchForm.getFieldsValue();
+    batchCreateMutation.mutate(values);
   };
+
+  // 手动添加学生（在批量创建表单中）
 
   // 处理Excel导入
   const handleImport = async (file: File) => {
@@ -230,10 +281,13 @@ const UserManagement: React.FC = () => {
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
 
+      const defaultSchoolId = batchForm.getFieldValue('batch_school_id') || user?.school_id;
+
       const students = jsonData.map((row: any) => ({
         username: row['学号'] || row['username'],
         nickname: row['姓名'] || row['nickname'] || row['姓名(昵称)'],
         password: row['密码'] || row['password'],
+        school_id: row['学校'] || defaultSchoolId,
       }));
 
       batchCreateMutation.mutate({
@@ -246,16 +300,84 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  // 批量创建提交
-  const handleBatchSubmit = () => {
-    const values = batchForm.getFieldsValue();
-    values.students = values.students.filter((s: BatchStudentData) => s.username);
+  // 处理导出
+  const handleExport = () => {
+    setExportModalVisible(true);
+    if (user?.role === 'school_admin' && user.school_id) {
+      setExportFilters({
+        school_id: user.school_id,
+        role: 'student'
+      });
+    } else if (user?.role === 'teacher' && user.school_id) {
+      setExportFilters({
+        school_id: user.school_id,
+        role: 'student'
+      });
+    } else {
+      setExportFilters({ role: 'student' });
+    }
+  };
 
-    batchCreateMutation.mutate({
-      students: values.students,
-      auto_generate_username: values.auto_generate_username || false,
-      auto_generate_password: values.auto_generate_password || false,
-    });
+  // 提交导出筛选
+  const handleExportSubmit = () => {
+    exportMutation.mutate(exportFilters);
+  };
+
+  // 批量删除
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请至少选择一个用户');
+      return;
+    }
+    batchDeleteMutation.mutate(selectedRowKeys as number[]);
+  };
+
+  // 切换用户（系统管理员专用）
+  const handleSwitchUser = () => {
+    setSwitchModalVisible(true);
+  };
+
+  const handleSwitchSubmit = async (targetUserId: number) => {
+    try {
+      await api.get('/users/switch_user', {
+        params: { target_user_id: targetUserId }
+      });
+      message.success('切换用户成功');
+      setSwitchModalVisible(false);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      // 重新获取当前用户信息
+      await fetchUser();
+    } catch (error: any) {
+      const errorDetail = error.response?.data?.detail;
+      let errorMessage = '切换用户失败';
+      if (typeof errorDetail === 'string') {
+        errorMessage = errorDetail;
+      } else if (Array.isArray(errorDetail) && errorDetail.length > 0) {
+        errorMessage = errorDetail[0].msg || errorMessage;
+      }
+      message.error(errorMessage);
+    }
+  };
+
+  const handleCancelSwitch = async () => {
+    try {
+      await api.get('/users/cancel_switch');
+      message.success('已恢复系统管理员身份');
+      setSwitchModalVisible(false);
+      queryClient.invalidateQueries({ queryKey: ['users', 'me'] });
+      setSwitchTargetUser(null);
+      // 重新获取当前用户信息
+      await fetchUser();
+    } catch (error: any) {
+      const errorDetail = error.response?.data?.detail;
+      let errorMessage = '取消切换失败';
+      if (typeof errorDetail === 'string') {
+        errorMessage = errorDetail;
+      } else if (Array.isArray(errorDetail) && errorDetail.length > 0) {
+        errorMessage = errorDetail[0].msg || errorMessage;
+      }
+      message.error(errorMessage);
+    }
   };
 
   const columns = [
@@ -266,10 +388,16 @@ const UserManagement: React.FC = () => {
       width: 80,
     },
     {
-      title: '学号',
+      title: '用户名',
       dataIndex: 'username',
       key: 'username',
       width: 120,
+      render: (text: string) => (
+        <Space>
+          {text}
+          {user?.id === selectedUser?.id && <SwapOutlined style={{ marginLeft: 8, cursor: 'pointer', color: '#1890ff' }} onClick={handleSwitchUser} />}
+        </Space>
+      ),
     },
     {
       title: '姓名',
@@ -314,7 +442,7 @@ const UserManagement: React.FC = () => {
         if (!date) return '-';
         try {
           const d = new Date(date);
-          if (isNaN(d.getTime())) return date; // 如果无效，返回原字符串
+          if (isNaN(d.getTime())) return date;
           return d.toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -332,11 +460,18 @@ const UserManagement: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 200,
       render: (_: any, record: Student) => {
         const canEdit = user?.role === 'system_admin' ||
                          (user?.role === 'school_admin' && user.school_id === record.school_id);
-        const canDelete = user?.role === 'system_admin';
+        // 不能删除自己，也不能删除系统管理员
+        const canDelete = user?.role === 'system_admin' &&
+                            record.id !== user.id &&
+                            record.role !== 'system_admin';
+        // 不能修改系统管理员的密码
+        const canChangePassword = user?.role === 'system_admin' &&
+                                record.id !== user.id &&
+                                record.role !== 'system_admin';
         return (
           <Space size="small">
             {canEdit && (
@@ -346,6 +481,16 @@ const UserManagement: React.FC = () => {
                 onClick={() => handleEditUser(record)}
               >
                 编辑
+              </Button>
+            )}
+            {canChangePassword && (
+              <Button
+                type="link"
+                size="small"
+                icon={<LockOutlined />}
+                onClick={() => handleChangePassword(record)}
+              >
+                修改密码
               </Button>
             )}
             {canDelete && (
@@ -360,6 +505,23 @@ const UserManagement: React.FC = () => {
                 </Button>
               </Popconfirm>
             )}
+            {!canDelete && (
+              <Button
+                type="link"
+                size="small"
+                danger
+                disabled
+                title={
+                  user && record.id === user.id
+                    ? '不能删除自己'
+                    : record.role === 'system_admin'
+                    ? '不能删除系统管理员'
+                    : '无权删除此用户'
+                }
+              >
+                删除
+              </Button>
+            )}
           </Space>
         );
       },
@@ -370,8 +532,27 @@ const UserManagement: React.FC = () => {
     <div style={{ padding: '24px' }}>
       <h1>用户管理</h1>
 
+      {/* 切换状态提示 */}
+      {user?.is_switched && (
+        <Alert
+          message="当前已切换为其他用户"
+          description={
+            <Space>
+              <span>您正在以 {user.nickname || user.username} 的身份操作</span>
+              <Button type="primary" size="small" onClick={handleCancelSwitch}>
+                恢复管理员身份
+              </Button>
+            </Space>
+          }
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          closable={false}
+        />
+      )}
+
       {/* 学校管理员和系统管理员可以筛选学校 */}
-      {(user?.role === 'school_admin' || user?.role === 'system_admin') && schools && (
+      {(user?.role === 'school_admin' || (user?.role === 'system_admin' && !user?.is_switched)) && schools && (
         <Card style={{ marginBottom: 16 }}>
           <Space>
             <span>学校筛选：</span>
@@ -415,9 +596,26 @@ const UserManagement: React.FC = () => {
           <Button icon={<FileExcelOutlined />} onClick={downloadTemplate}>
             下载模板
           </Button>
-          <Button icon={<ExportOutlined />} onClick={() => exportMutation.mutate()} loading={exportMutation.isPending}>
-            导出学生名单
+          <Button icon={<ExportOutlined />} onClick={handleExport}>
+            导出名单
           </Button>
+          {user?.role === 'system_admin' && !user?.is_switched && (
+            <Button icon={<SwapOutlined />} onClick={handleSwitchUser}>
+              切换用户
+            </Button>
+          )}
+          {selectedRowKeys.length > 0 && (
+            <Popconfirm
+              title={`确定要删除选中的 ${selectedRowKeys.length} 个用户吗？`}
+              onConfirm={handleBatchDelete}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button danger icon={<DeleteOutlined />} loading={batchDeleteMutation.isPending}>
+                批量删除
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       </Card>
 
@@ -428,6 +626,16 @@ const UserManagement: React.FC = () => {
           dataSource={filteredUsers}
           loading={isLoading}
           rowKey="id"
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (selectedRowKeys: React.Key[]) => {
+              setSelectedRowKeys(selectedRowKeys);
+            },
+            getCheckboxProps: (record: Student) => ({
+              // 系统管理员可以删除所有用户，学校管理员只能删除本校用户
+              disabled: user?.role !== 'system_admin' && (user?.role === 'school_admin' && record.school_id !== user.school_id),
+            }),
+          }}
           pagination={{
             pageSize: 20,
             showSizeChanger: true,
@@ -436,9 +644,9 @@ const UserManagement: React.FC = () => {
         />
       </Card>
 
-      {/* 创建/批量创建/导入/编辑 模态框 */}
+      {/* 创建/批量创建/导入/编辑/修改密码 模态框 */}
       <Modal
-        title={modalType === 'batch' ? '批量创建学生' : modalType === 'import' ? '导入学生名单' : modalType === 'edit' ? '编辑用户' : '创建用户'}
+        title={modalType === 'batch' ? '批量创建学生' : modalType === 'import' ? '导入学生名单' : modalType === 'edit' ? '编辑用户' : modalType === 'password' ? '修改密码' : '创建用户'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -471,6 +679,15 @@ const UserManagement: React.FC = () => {
             >
               导入
             </Button>
+          ) : modalType === 'password' ? (
+            <Button
+              key="submit"
+              type="primary"
+              onClick={() => form.submit()}
+              loading={changePasswordMutation.isPending}
+            >
+              修改密码
+            </Button>
           ) : (
             <Button
               key="submit"
@@ -483,8 +700,8 @@ const UserManagement: React.FC = () => {
           ),
         ]}
       >
-        <Tabs activeKey={modalType === 'edit' ? 'create' : modalType} onChange={(key) => {
-          if (key !== 'edit') {
+        <Tabs activeKey={modalType === 'edit' || modalType === 'password' ? 'create' : modalType} onChange={(key) => {
+          if (key !== 'edit' && key !== 'password') {
             setModalType(key as any);
           }
         }}>
@@ -494,27 +711,93 @@ const UserManagement: React.FC = () => {
               layout="vertical"
               onFinish={handleSubmit}
             >
-              <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-                <Input disabled={modalType === 'edit'} />
-              </Form.Item>
-              <Form.Item name="password" label="密码" rules={modalType === 'edit' ? [] : [{ required: true }]}>
-                <Input.Password placeholder={modalType === 'edit' ? '留空则不修改密码' : ''} />
-              </Form.Item>
-              <Form.Item name="nickname" label="昵称（学生姓名）">
-                <Input />
-              </Form.Item>
-              <Form.Item name="role" label="角色" rules={[{ required: true }]}>
-                <Select disabled={modalType === 'edit'}>
-                  <Select.Option value="student">学生</Select.Option>
-                  <Select.Option value="teacher">教师</Select.Option>
-                  {user?.role === 'system_admin' && (
-                    <Select.Option value="school_admin">学校管理员</Select.Option>
+              {modalType === 'password' ? (
+                <>
+                  <Form.Item name="password" label="新密码" rules={[{ required: true, min: 6 }]}>
+                    <Input.Password placeholder="请输入新密码（至少6位）" />
+                  </Form.Item>
+                  <Form.Item name="confirmPassword" label="确认密码" rules={[
+                    { required: true },
+                    ({ getFieldValue }) => ({
+                      validator: (_, value) => {
+                        if (value && value !== getFieldValue('password')) {
+                          return Promise.reject('两次输入的密码不一致');
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}>
+                    <Input.Password placeholder="请再次输入新密码" />
+                  </Form.Item>
+                </>
+              ) : (
+                <>
+                  <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+                    <Input disabled={modalType === 'edit'} />
+                  </Form.Item>
+                  <Form.Item name="password" label="密码" rules={modalType === 'edit' ? [] : [{ required: true }]}>
+                    <Input.Password placeholder={modalType === 'edit' ? '留空则不修改密码' : ''} />
+                  </Form.Item>
+                  <Form.Item name="nickname" label="昵称（学生姓名）">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+                    <Select disabled={modalType === 'edit'}>
+                      <Select.Option value="student">学生</Select.Option>
+                      <Select.Option value="teacher">教师</Select.Option>
+                      {user?.role === 'system_admin' && (
+                        <Select.Option value="school_admin">学校管理员</Select.Option>
+                      )}
+                    </Select>
+                  </Form.Item>
+                  {user?.role === 'system_admin' && schools && (
+                    <Form.Item name="school_id" label="学校">
+                      <Select placeholder="选择学校">
+                        {schools.map((school: School) => (
+                          <Select.Option key={school.id} value={school.id}>
+                            {school.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
                   )}
-                </Select>
-              </Form.Item>
+                </>
+              )}
+            </Form>
+          </TabPane>
+
+          <TabPane tabKey="batch" key="batch">
+            <Form form={batchForm} layout="vertical" initialValues={{ students: [{ username: '', nickname: '', password: '', school_id: user?.school_id }], auto_generate_username: false, auto_generate_password: false }}>
+              <Alert
+                message="批量创建说明"
+                description="可以手动输入学生信息，也可以自动生成学号和密码。系统管理员可以为不同学校创建学生。"
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+              {user?.role === 'system_admin' && (
+                <Alert
+                  message="学校选择说明"
+                  description="如果不选择学校，将根据批量创建按钮的上下文确定学校。建议明确选择学校以避免混淆。"
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )}
               {user?.role === 'system_admin' && schools && (
-                <Form.Item name="school_id" label="学校">
-                  <Select placeholder="选择学校">
+                <Form.Item name="batch_school_id" label="学校（可选）">
+                  <Select
+                    placeholder="请选择学校（留空则默认为所选学校）"
+                    allowClear
+                    onChange={(value) => {
+                      // 更新表单中所有学生的 school_id
+                      const currentStudents = batchForm.getFieldValue('students') || [];
+                      batchForm.setFieldValue('students', currentStudents.map((s: BatchStudentData) => ({
+                        ...s,
+                        school_id: value || user.school_id
+                      })));
+                    }}
+                  >
                     {schools.map((school: School) => (
                       <Select.Option key={school.id} value={school.id}>
                         {school.name}
@@ -523,18 +806,6 @@ const UserManagement: React.FC = () => {
                   </Select>
                 </Form.Item>
               )}
-            </Form>
-          </TabPane>
-
-          <TabPane tabKey="batch" key="batch">
-            <Form form={batchForm} layout="vertical" initialValues={{ students: [{ username: '', nickname: '', password: '' }], auto_generate_username: false, auto_generate_password: false }}>
-              <Alert
-                message="批量创建说明"
-                description="可以手动输入学生信息，也可以自动生成学号和密码。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
               <Form.Item name="auto_generate_username" valuePropName="checked">
                 <span>自动生成学号（格式：2024XXXX）</span>
               </Form.Item>
@@ -544,27 +815,45 @@ const UserManagement: React.FC = () => {
               <Form.List name="students">
                 {(fields, { add, remove }) => (
                   <>
-                    {fields.map((field, index) => (
+                    {fields.map((field) => (
                       <Space key={field.key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
                         <Form.Item
                           name={[field.name, 'username']}
                           rules={[{ required: true }]}
-                          style={{ marginBottom: 0, width: 150 }}
+                          style={{ marginBottom: 0, width: 130 }}
                         >
                           <Input placeholder="学号（或留空自动生成）" />
                         </Form.Item>
                         <Form.Item
                           name={[field.name, 'nickname']}
-                          style={{ marginBottom: 0, width: 150 }}
+                          rules={[{ required: true }]}
+                          style={{ marginBottom: 0, width: 130 }}
                         >
                           <Input placeholder="姓名" />
                         </Form.Item>
                         <Form.Item
                           name={[field.name, 'password']}
-                          style={{ marginBottom: 0, width: 150 }}
+                          style={{ marginBottom: 0, width: 130 }}
                         >
                           <Input.Password placeholder="密码（或留空自动生成）" />
                         </Form.Item>
+                        {user?.role === 'system_admin' && (
+                          <Form.Item
+                            name={[field.name, 'school_id']}
+                            style={{ marginBottom: 0, width: 130 }}
+                          >
+                            <Select
+                              placeholder="学校（可选）"
+                              allowClear
+                            >
+                              {schools?.map((school: School) => (
+                                <Select.Option key={school.id} value={school.id}>
+                                  {school.name}
+                                </Select.Option>
+                              ))}
+                            </Select>
+                          </Form.Item>
+                        )}
                         <Button type="link" danger onClick={() => remove(field.name)}>
                           删除
                         </Button>
@@ -583,10 +872,38 @@ const UserManagement: React.FC = () => {
             <Space direction="vertical" style={{ width: '100%' }} size="large">
               <Alert
                 message="导入说明"
-                description="请上传Excel文件，文件应包含以下列：学号、姓名（昵称）、密码。如果不包含密码，将使用自动生成的密码。"
+                description={
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    <li>请上传Excel文件，文件应包含以下列：学号、姓名（昵称）、密码。</li>
+                    <li>如果不包含密码，将使用自动生成的密码。</li>
+                    {user?.role === 'system_admin' && (
+                      <li>可以添加"学校"列来指定学生所属学校（可选）。</li>
+                    )}
+                    {user?.role === 'school_admin' && (
+                      <li>如果不指定学校，将默认为您所在的学校。</li>
+                    )}
+                  </ul>
+                }
                 type="info"
                 showIcon
               />
+              {user?.role === 'system_admin' && schools && (
+                <Form.Item label="默认学校（可选）">
+                  <Select
+                    placeholder="选择默认学校（可选）"
+                    allowClear
+                    onChange={(value) => {
+                      batchForm.setFieldValue('batch_school_id', value);
+                    }}
+                  >
+                    {schools.map((school: School) => (
+                      <Select.Option key={school.id} value={school.id}>
+                        {school.name}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
               <Upload.Dragger
                 accept=".xlsx,.xls"
                 maxCount={1}
@@ -610,6 +927,170 @@ const UserManagement: React.FC = () => {
             </Space>
           </TabPane>
         </Tabs>
+      </Modal>
+
+      {/* 导出筛选弹窗 */}
+      <Modal
+        title="导出用户名单"
+        open={exportModalVisible}
+        onCancel={() => setExportModalVisible(false)}
+        onOk={handleExportSubmit}
+        okText="导出"
+        okButtonProps={{ loading: exportMutation.isPending }}
+        width={600}
+      >
+        <Form layout="vertical">
+          <Form.Item label="学校筛选">
+            <Select
+              placeholder="全部学校"
+              allowClear
+              value={exportFilters.school_id}
+              onChange={(value) => setExportFilters({ ...exportFilters, school_id: value })}
+              disabled={user?.role === 'school_admin' || user?.role === 'teacher'}
+            >
+              {schools?.map((school: School) => (
+                <Select.Option key={school.id} value={school.id}>
+                  {school.name}
+                </Select.Option>
+              ))}
+            </Select>
+            {user?.role === 'school_admin' && (
+              <Alert
+                message="学校管理员权限限制"
+                description="您只能导出本校的用户名单"
+                type="info"
+                style={{ marginTop: 8 }}
+              />
+            )}
+          </Form.Item>
+          <Form.Item label="角色筛选">
+            <Select
+              placeholder="全部角色"
+              allowClear
+              value={exportFilters.role}
+              onChange={(value) => setExportFilters({ ...exportFilters, role: value })}
+            >
+              <Select.Option value="student">学生</Select.Option>
+              <Select.Option value="teacher">教师</Select.Option>
+              <Select.Option value="school_admin">学校管理员</Select.Option>
+            </Select>
+          </Form.Item>
+          <Alert
+            message="导出说明"
+            description={
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li>默认导出所有学生用户</li>
+                <li>可以按学校和角色进行筛选导出</li>
+                <li>学校管理员和教师只能导出本校的用户</li>
+                <li>系统管理员可以导出所有学校的用户</li>
+              </ul>
+            }
+            type="info"
+            showIcon
+          />
+        </Form>
+      </Modal>
+
+      {/* 切换用户弹窗（系统管理员专用） */}
+      <Modal
+        title="切换用户身份"
+        open={switchModalVisible}
+        onCancel={() => {
+          setSwitchModalVisible(false);
+          setSwitchTargetUser(null);
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            handleCancelSwitch();
+          }}>
+            取消
+          </Button>,
+          <Button key="switch" type="primary" onClick={() => {
+            if (switchTargetUser) {
+              handleSwitchSubmit(switchTargetUser.id);
+            }
+          }} disabled={!switchTargetUser}>
+            确认切换
+          </Button>,
+          <Button
+            key="recover"
+            danger
+            onClick={handleCancelSwitch}
+            icon={<LogoutOutlined />}
+          >
+            恢复身份
+          </Button>
+        ]}
+        width={600}
+      >
+        <Alert
+          message="身份切换说明"
+          description={
+            <div style={{ lineHeight: 1.6 }}>
+              <p><strong>系统管理员快速切换用户功能</strong></p>
+              <ul style={{ margin: '16px 0 0 0 20px', paddingLeft: 20 }}>
+                <li>切换后，系统管理员将临时以目标用户的身份操作</li>
+                <li>批量创建学生时将使用切换后的用户所属学校</li>
+                <li>可以随时恢复为系统管理员身份</li>
+                <li><strong style={{ color: 'red' }}>注意：此功能仅用于测试和特定场景</strong></li>
+              </ul>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <Divider />
+
+        <Form layout="vertical">
+          <Form.Item label="选择要切换的用户">
+            <Select
+              placeholder="请选择用户"
+              showSearch
+              optionFilterProp="children"
+              value={switchTargetUser?.id || undefined}
+              onChange={(value) => {
+                const targetUser = users?.find((u: Student) => u.id === value);
+                setSwitchTargetUser(targetUser || null);
+              }}
+              notFoundContent="未找到用户"
+              filterOption={(input, option) =>
+                option?.nickname?.toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {users?.map((userItem: Student) => (
+                <Select.Option key={userItem.id} value={userItem.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{userItem.nickname || userItem.username}</div>
+                      <div style={{ color: '#999', fontSize: 12 }}>
+                        @{userItem.username} ({userItem.role})
+                      </div>
+                    </div>
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              danger
+              onClick={handleCancelSwitch}
+              icon={<LogoutOutlined />}
+            >
+              立即恢复系统管理员身份
+            </Button>
+          </Form.Item>
+
+          <Alert
+            message="权限说明"
+            description={`切换后将以用户 ${switchTargetUser?.nickname || switchTargetUser?.username || '...'} (ID: ${switchTargetUser?.id}) 的身份进行操作`}
+            type="info"
+          />
+        </Form>
       </Modal>
     </div>
   );

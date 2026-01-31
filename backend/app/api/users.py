@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_serializer
@@ -10,7 +10,9 @@ from ..models.user import User, UserRole
 from ..utils.dependencies import (
     require_system_admin,
     require_school_admin_or_above,
-    get_current_user
+    get_current_user,
+    _get_current_user,
+    CurrentUserResponse
 )
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
@@ -36,23 +38,26 @@ class UserResponse(BaseModel):
     username: str
     nickname: Optional[str] = None  # 昵称/学生姓名
     role: str
-    school_id: int | None
-    created_at: datetime  # 使用datetime类型，然后通过序列化转换为字符串
-
-    @field_serializer('created_at')
-    def serialize_created_at(self, dt: datetime) -> str:
-        """将datetime序列化为ISO 8601格式字符串"""
-        return dt.isoformat()
+    school_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    is_switched: bool = False  # 是否为切换后的用户
+    original_user_id: Optional[int] = None  # 原始管理员用户ID
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, dt: Optional[datetime], _info):
+        if dt is None:
+            return None
+        return dt.isoformat()
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """创建用户"""
     # 检查权限：学校管理员只能创建本校用户
@@ -96,7 +101,7 @@ async def list_users(
     school_id: Optional[int] = None,
     role: Optional[UserRole] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """列出用户"""
     query = db.query(User)
@@ -155,7 +160,7 @@ async def download_student_template():
 async def export_students(
     school_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """导出学生名单（Excel格式）"""
     import io
@@ -210,11 +215,119 @@ async def export_students(
     )
 
 
+@router.get("/switch_user", response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def switch_user(
+    target_user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_user)
+):
+    """系统管理员切换到指定用户"""
+    # 检查当前用户是否为系统管理员
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有系统管理员可以切换用户"
+        )
+    # 获取目标用户
+    target_user = db.query(User).filter(User.id == target_user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="目标用户不存在"
+        )
+
+    # 检查目标用户是否为系统管理员
+    if target_user.role == UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="不能切换到系统管理员"
+        )
+
+    # 更新当前用户的切换状态
+    current_user.switched_user_id = target_user_id
+    current_user.switched_to_username = target_user.username
+    current_user.switched_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    db.refresh(target_user)
+
+    # TODO: Add audit logging after creating audit_logs table migration
+    # from ..models.audit_log import AuditLog
+    # audit_log = AuditLog(...)
+    # db.add(audit_log)
+    # db.commit()
+
+    # 返回目标用户信息
+    # 注意：target_user.created_at 是 datetime 对象，UserResponse 期望 datetime
+    return UserResponse(
+        id=target_user.id,
+        username=target_user.username,
+        nickname=target_user.nickname,
+        role=target_user.role.value,
+        school_id=target_user.school_id,
+        created_at=target_user.created_at,
+        is_switched=True,
+        original_user_id=current_user.id
+    )
+
+
+@router.get("/cancel_switch", response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def cancel_switch(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_user)
+):
+    """取消切换用户，恢复系统管理员身份"""
+    # 检查当前用户是否为被切换的用户
+    # 如果是，则需要查找原始管理员并取消切换
+    admin_user = db.query(User).filter(User.switched_user_id == current_user.id).first()
+
+    if not admin_user:
+        # 如果没有找到切换的admin，说明当前就是admin用户
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有系统管理员可以取消切换"
+            )
+        admin_user = current_user
+    else:
+        # 确认找到的确实是系统管理员
+        if admin_user.role != UserRole.SYSTEM_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有系统管理员可以取消切换"
+            )
+
+    # 重置切换状态
+    admin_user.switched_user_id = None
+    admin_user.switched_to_username = None
+    admin_user.switched_at = None
+    db.commit()
+    db.refresh(admin_user)
+
+    # TODO: Add audit logging after creating audit_logs table migration
+    # from ..models.audit_log import AuditLog
+    # audit_log = AuditLog(...)
+    # db.add(audit_log)
+    # db.commit()
+
+    # 返回管理员用户信息
+    return UserResponse(
+        id=admin_user.id,
+        username=admin_user.username,
+        nickname=admin_user.nickname,
+        role=admin_user.role.value,
+        school_id=admin_user.school_id,
+        created_at=admin_user.created_at,
+        is_switched=False,
+        original_user_id=None
+    )
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """获取用户信息"""
     user = db.query(User).filter(User.id == user_id).first()
@@ -246,7 +359,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """更新用户信息"""
     user = db.query(User).filter(User.id == user_id).first()
@@ -255,7 +368,7 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
-    
+
     # 权限检查
     if current_user.role == UserRole.SCHOOL_ADMIN:
         if user.school_id != current_user.school_id:
@@ -269,7 +382,14 @@ async def update_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权设置系统管理员角色"
             )
-    
+
+    # 不能修改系统管理员的密码
+    if user_data.password and user.role == UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="不能修改系统管理员的密码"
+        )
+
     if user_data.password:
         from ..utils.security import get_password_hash
         user.password_hash = get_password_hash(user_data.password)
@@ -279,7 +399,7 @@ async def update_user(
         user.role = user_data.role
     if user_data.school_id is not None:
         user.school_id = user_data.school_id
-    
+
     db.commit()
     db.refresh(user)
     return user
@@ -289,7 +409,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """删除用户（仅系统管理员）"""
     user = db.query(User).filter(User.id == user_id).first()
@@ -298,7 +418,21 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
-    
+
+    # 不能删除自己
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="不能删除自己"
+        )
+
+    # 不能删除系统管理员
+    if user.role == UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="不能删除系统管理员"
+        )
+
     db.delete(user)
     db.commit()
     return None
@@ -307,10 +441,10 @@ async def delete_user(
 class BatchStudentCreate(BaseModel):
     """批量创建学生"""
     students: List[dict]
-    # 每个学生包含：username(必填), nickname(可选), password(可选)
+    # 每个学生包含：username(必填), nickname(可选), password(可选), school_id(可选)
     # 如果不提供password，会自动生成
     auto_generate_password: bool = False
-    # 如果不提供username，会自动生成学号
+    # 如果不提供username，会自动生成
     auto_generate_username: bool = False
 
 
@@ -326,7 +460,7 @@ class BatchStudentResponse(BaseModel):
 async def batch_create_students(
     data: BatchStudentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """批量创建学生"""
     # 学校管理员只能创建本校学生
@@ -410,7 +544,7 @@ async def batch_create_students(
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 async def import_students(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_school_admin_or_above)
+    current_user: CurrentUserResponse = Depends(require_school_admin_or_above)
 ):
     """导入学生名单（从上传的Excel文件）"""
     from fastapi import UploadFile, File

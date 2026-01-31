@@ -2,6 +2,8 @@
 
 一个基于Few-shot Learning的字迹识别系统，用于识别作业上的字迹归属。
 
+- 本项目使用生成式AI进行开发。
+
 > 📖 **详细开发指南**: 请参阅 [DEVELOPMENT.md](./docs/DEVELOPMENT.md) 获取完整的开发文档。
 
 ## 项目结构

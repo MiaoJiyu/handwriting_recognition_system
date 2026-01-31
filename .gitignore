@@ -18,6 +18,7 @@ build/
 *.pt
 *.onnx
 models/
+!backend/app/models/
 
 # 上传文件
 uploads/
@@ -58,3 +59,6 @@ frontend/build/
 *.tmp
 *.temp
 .DS_Store
+
+# 开发文件
+run_frp.sh

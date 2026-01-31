@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Button, Space, Alert, Descriptions, Row, Col, Tag, message, Popconfirm, Timeline } from 'antd';
-import { ReloadOutlined, SettingOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Button, Space, Alert, Descriptions, Tag, message, Timeline } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,27 +37,27 @@ const SystemManagement: React.FC = () => {
     onSuccess: (data: any) => {
       message.success(data.message || '系统配置已重载');
       // 记录操作历史
-      setOperationHistory(prev => [
+      setOperationHistory((prev) => [
         {
           time: new Date().toLocaleString(),
           action: '重载系统配置',
-          status: 'success',
+          status: 'success' as const,
         },
         ...prev,
       ].slice(0, 10)); // 只保留最近10条记录
       // 重新获取配置
       queryClient.invalidateQueries({ queryKey: ['system', 'config'] });
       // 更新reloadKey以触发状态刷新
-      setReloadKey(prev => prev + 1);
+      setReloadKey((prev) => prev + 1);
     },
     onError: (error: any) => {
       message.error(error.response?.data?.detail || '重载失败');
       // 记录操作历史
-      setOperationHistory(prev => [
+      setOperationHistory((prev) => [
         {
           time: new Date().toLocaleString(),
           action: '重载系统配置',
-          status: 'error',
+          status: 'error' as const,
         },
         ...prev,
       ].slice(0, 10));
@@ -140,8 +140,8 @@ const SystemManagement: React.FC = () => {
             <Descriptions.Item label="允许源">
               {Array.isArray(config.cors_origins) ? (
                 <Space size={[4, 4]} wrap>
-                  {config.cors_origins.map((origin, index) => (
-                    <Tag key={index} color="blue">
+                  {config.cors_origins.map((origin: string, _index: number) => (
+                    <Tag key={_index} color="blue">
                       {origin}
                     </Tag>
                   ))}
@@ -167,7 +167,7 @@ const SystemManagement: React.FC = () => {
       <Card title="最近操作" style={{ marginTop: 16 }}>
         {operationHistory.length > 0 ? (
           <Timeline
-            items={operationHistory.map((op, index) => ({
+            items={operationHistory.map((op) => ({
               color: op.status === 'success' ? 'green' : 'red',
               children: (
                 <div>

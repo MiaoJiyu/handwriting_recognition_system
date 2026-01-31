@@ -23,6 +23,10 @@ class User(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # 系统管理员切换功能
+    switched_user_id = Column(Integer, nullable=True)
+    switched_to_username = Column(String(50), nullable=True)
+    switched_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     school = relationship("School", back_populates="users")

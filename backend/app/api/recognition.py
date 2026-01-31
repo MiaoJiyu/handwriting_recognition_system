@@ -8,7 +8,7 @@ import shutil
 from ..core.database import get_db
 from ..core.config import settings
 from ..models.recognition_log import RecognitionLog
-from ..utils.dependencies import require_teacher_or_above, get_current_user
+from ..utils.dependencies import require_teacher_or_above, get_current_user, CurrentUserResponse
 from ..services.inference_client import InferenceClient
 
 router = APIRouter(prefix="/api/recognition", tags=["识别"])
@@ -32,7 +32,7 @@ class RecognitionResponse(BaseModel):
 async def recognize(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher_or_above)
+    current_user: CurrentUserResponse = Depends(require_teacher_or_above)
 ):
     """识别单张图片"""
     # 验证文件类型
@@ -122,12 +122,12 @@ async def recognize(
 async def get_recognition_logs(
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """获取识别日志"""
     query = db.query(RecognitionLog)
     
-    if current_user.role.value == "student":
+    if current_user.role == "student":
         query = query.filter(RecognitionLog.user_id == current_user.id)
     
     logs = query.order_by(RecognitionLog.created_at.desc()).limit(limit).all()

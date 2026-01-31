@@ -1,13 +1,14 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from ..core.database import get_db
 from ..core.config import settings
 from ..models.user import User
 from ..utils.security import verify_password, get_password_hash, create_access_token
-from ..utils.dependencies import get_current_user
+from ..utils.dependencies import get_current_user, CurrentUserResponse, _get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -20,8 +21,17 @@ class Token(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    nickname: Optional[str] = None
     role: str
     school_id: int | None
+    created_at: Optional[datetime] = None
+    is_switched: bool = False  # 是否为切换后的用户
+    original_user_id: Optional[int] = None  # 原始管理员用户ID
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, dt: Optional[datetime]) -> Optional[str]:
+        """将datetime序列化为ISO 8601格式字符串"""
+        return dt.isoformat() if dt else None
 
     class Config:
         from_attributes = True
@@ -34,10 +44,19 @@ async def login(
 ):
     """用户登录"""
     user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
+    
+    # 详细的错误提示
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail="用户不存在，请检查用户名是否正确",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码错误，请检查密码是否正确",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -95,7 +114,7 @@ async def register(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+async def get_current_user_info(current_user: CurrentUserResponse = Depends(get_current_user)):
     """获取当前用户信息"""
     return current_user
 
@@ -114,21 +133,19 @@ def is_token_blacklisted(token: str) -> bool:
     return token in token_blacklist
 
 
-def add_token_to_blacklist(token: str):
-    """将token添加到黑名单"""
-    token_blacklist.add(token)
-
-
 @router.post("/logout", response_model=LogoutResponse)
-async def logout(
-    current_user: User = Depends(get_current_user)
-):
+async def logout(original_user: User = Depends(_get_current_user), db: Session = Depends(get_db)):
     """用户登出
-    
+
     将当前token加入黑名单，使其失效。
     注意：前端也应该删除本地存储的token。
     """
-    from fastapi import Request
+    # 清除切换状态
+    if original_user.switched_user_id:
+        original_user.switched_user_id = None
+        original_user.switched_to_username = None
+        original_user.switched_at = None
+        db.commit()
     # 这里简单地返回成功消息
     # 实际的token失效由前端删除token处理
     # 如果需要服务端强制失效，可以使用Redis存储黑名单

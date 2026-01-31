@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from ..core.database import get_db
 from ..core.config import settings
 from ..models.user import User
-from ..utils.dependencies import get_current_user, require_system_admin
+from ..utils.dependencies import get_current_user, require_system_admin, CurrentUserResponse
 from ..core.config import Settings
 from importlib import reload
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/system", tags=["系统管理"])
 
 @router.post("/reload", response_model=ReloadResponse)
 async def reload_system(
-    current_user: User = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """
     重载系统配置
@@ -58,7 +58,7 @@ async def reload_system(
 
 @router.get("/config", response_model=dict)
 async def get_system_config(
-    current_user: User = Depends(require_system_admin)
+    current_user: CurrentUserResponse = Depends(require_system_admin)
 ):
     """
     获取当前系统配置（仅系统管理员可访问）
