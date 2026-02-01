@@ -13,6 +13,10 @@ import Recognition from './pages/Recognition';
 import UserManagement from './pages/UserManagement';
 import TrainingManagement from './pages/TrainingManagement';
 import SystemManagement from './pages/SystemManagement';
+import TokenManagement from './pages/TokenManagement';
+import TokenAPITest from './pages/TokenAPITest';
+import UserCenter from './pages/UserCenter';
+import ScheduledTasks from './pages/ScheduledTasks';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -53,7 +57,11 @@ const App: React.FC = () => {
                         <Route path="/recognition" element={<Recognition />} />
                         <Route path="/users" element={<UserManagement />} />
                         <Route path="/training" element={<TrainingManagement />} />
+                        <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
                         <Route path="/system" element={<SystemManagement />} />
+                        <Route path="/tokens" element={<TokenManagement />} />
+                        <Route path="/api-test" element={<TokenAPITest />} />
+                        <Route path="/user-center" element={<UserCenter />} />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>

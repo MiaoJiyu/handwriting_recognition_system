@@ -3,6 +3,7 @@
 一个基于Few-shot Learning的字迹识别系统，用于识别作业上的字迹归属。
 
 - 本项目使用生成式AI进行开发。
+- 如果您也想使用AI对本项目进行修改，您可以自行修改[CODEBUDDY.md](./CODEBUDDY.md)。
 
 > 📖 **详细开发指南**: 请参阅 [DEVELOPMENT.md](./docs/DEVELOPMENT.md) 获取完整的开发文档。
 
@@ -11,7 +12,6 @@
 - `backend/` - Web后端（FastAPI）
 - `inference_service/` - 独立推理服务（gRPC + PyTorch）
 - `frontend/` - React前端
-- `desktop/` - Windows桌面应用（PyQt6）
 - `shared/` - 共享代码（Protobuf定义）
 - `docker/` - Docker部署配置
 
@@ -20,7 +20,6 @@
 - 后端：FastAPI + SQLAlchemy + MySQL
 - 推理服务：PyTorch + gRPC
 - 前端：React + TypeScript + Ant Design
-- 桌面：PyQt6
 - 算法：Siamese Network + Few-shot Learning
 
 ## 快速开始
@@ -164,11 +163,8 @@ docker-compose logs -f backend
 - ✅ 图片裁剪（手动标注手写区域）
 - ✅ 字迹识别（上传图片识别归属）
 - ✅ 训练管理（触发模型训练）
-
-### 桌面端(PyQt6)
-- ✅ 图片选择和拖拽上传
-- ✅ 字迹识别
-- ✅ 识别历史记录
+- ✅ Token 管理（创建、撤销、删除 API Token）
+- ✅ API 测试（在线测试 Token API 功能）
 
 ### 推理服务
 - ✅ 图像预处理（打印/手写分离、增强）
@@ -190,6 +186,10 @@ docker-compose logs -f backend
 
 - [开发指南](./docs/DEVELOPMENT.md) - 详细的开发环境搭建和规范
 - [实现检查](./docs/IMPLEMENTATION_CHECK.md) - 功能完成度检查报告
+- [Token API 快速入门](./docs/TOKEN_API_QUICKSTART.md) - 外部应用集成快速指南
+- [Token API 完整文档](./docs/TOKEN_API.md) - Token API 详细文档
+- [Token 管理功能](./docs/TOKEN_MANAGEMENT.md) - Token 管理和测试功能说明
+- [Token 用户和学校管理](./docs/TOKEN_USER_SCHOOL_MANAGEMENT.md) - Token API 用户和学校管理文档
 
 ## License
 

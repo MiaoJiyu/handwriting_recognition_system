@@ -5,6 +5,13 @@ from .recognition_log import RecognitionLog
 from .training_job import TrainingJob, TrainingJobStatus
 from .model import Model
 from .user_feature import UserFeature
+from .scheduled_task import (
+    ScheduledTask,
+    ScheduledTaskExecution,
+    ScheduleStatus,
+    ScheduleTriggerType
+)
+from .api_token import ApiToken
 
 __all__ = [
     "User",
@@ -18,4 +25,9 @@ __all__ = [
     "TrainingJobStatus",
     "Model",
     "UserFeature",
+    "ScheduledTask",
+    "ScheduledTaskExecution",
+    "ScheduleStatus",
+    "ScheduleTriggerType",
+    "ApiToken",
 ]

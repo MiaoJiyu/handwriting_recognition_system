@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import os
 from pathlib import Path
 from model.siamese_network import SiameseNetwork, ModelManager
@@ -11,6 +11,12 @@ from preprocessing.image_processor import ImageProcessor
 from core.config import settings
 import logging
 from datetime import datetime
+import sys
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from .auto_adapter import AutoTrainingAdapter, TrainingMetrics, TrainingStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +67,13 @@ class TripletLoss(nn.Module):
 
 class Trainer:
     """训练器"""
-    
-    def __init__(self):
+
+    def __init__(self, enable_auto_adapt: bool = True):
         self.model_manager = ModelManager(settings.MODEL_DIR)
         self.image_processor = ImageProcessor()
         self.training_status = {}  # 存储训练状态
+        self.auto_adapter = AutoTrainingAdapter() if enable_auto_adapt else None
+        self.current_metrics = None  # 存储当前训练指标
     
     def _load_samples_from_db(self) -> List[Dict]:
         """从数据库加载样本"""
@@ -161,8 +169,14 @@ class Trainer:
         
         return triplets
     
-    async def train(self, job_id: int, force_retrain: bool = False):
-        """训练模型"""
+    async def train(self, job_id: int, force_retrain: bool = False, auto_adapt: bool = True):
+        """训练模型
+
+        Args:
+            job_id: 任务ID
+            force_retrain: 是否强制重训练
+            auto_adapt: 是否使用自动适配（默认True）
+        """
         try:
             self.training_status[job_id] = {
                 "status": "running",
@@ -170,17 +184,51 @@ class Trainer:
                 "error_message": None
             }
 
-            # 加载样本
+            # 加载样本 (0% - 10%)
+            self.training_status[job_id]["progress"] = 0.05
             samples = self._load_samples_from_db()
             if len(samples) < 3:
                 raise ValueError("样本数量不足，至少需要3个样本")
+            self.training_status[job_id]["progress"] = 0.10
+
+            # 自动适配分析 (10% - 20%)
+            if auto_adapt and self.auto_adapter and not force_retrain:
+                logger.info("启用自动适配模式")
+                recommendation = self.auto_adapter.get_recommendation(samples)
+                self.training_status[job_id]["progress"] = 0.15
+
+                logger.info(f"自动适配建议: {recommendation}")
+
+                # 如果建议不训练，直接返回
+                if not recommendation.get("should_train", True):
+                    logger.info(f"自动适配建议不训练: {recommendation['reason']}")
+                    self.training_status[job_id] = {
+                        "status": "completed",
+                        "progress": 1.0,
+                        "error_message": None,
+                        "model_version_id": None,
+                        "skip_reason": recommendation.get("reason", "自动适配建议不训练")
+                    }
+                    return
+
+                # 使用建议的超参数
+                hyperparameters = recommendation.get("hyperparameters", {})
+                strategy = recommendation.get("strategy", "full_retrain")
+
+                logger.info(f"使用自动适配策略: {strategy}, 超参数: {hyperparameters}")
+            else:
+                hyperparameters = {}
+                strategy = "full_retrain" if force_retrain else "incremental_fine_tune"
+                logger.info(f"手动模式，策略: {strategy}")
+
+            self.training_status[job_id]["progress"] = 0.20
 
             # 检查是否有已存在的训练模型
             existing_model = self.model_manager.load_model()
             total_samples = len(samples)
 
             # 决定训练策略
-            if force_retrain or existing_model is None:
+            if force_retrain or existing_model is None or strategy == "full_retrain":
                 # 全量重训练 - 禁用ImageNet预训练，从头学习字迹特征
                 logger.info("执行全量重训练（禁用ImageNet预训练）")
                 model = SiameseNetwork(use_imagenet_pretrained=False)
@@ -193,25 +241,38 @@ class Trainer:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model.to(device)
 
+            self.training_status[job_id]["progress"] = 0.25
+
             # 创建Triplet数据集
             triplets = self._create_triplets(samples)
             if len(triplets) == 0:
                 logger.warning("Triplet样本对不足，降级使用对比损失训练（不需要多用户负样本）")
 
-            # 数据加载器（降低内存占用，避免 OOM killer）
+            # 数据加载器（使用动态batch_size）
             dataset = HandwritingDataset(samples, self.image_processor)
-            dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0)
+            batch_size = hyperparameters.get("batch_size", 4)
+            logger.info(f"使用batch_size: {batch_size}")
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
             # 损失函数和优化器
-            criterion = TripletLoss(margin=1.0)
-            optimizer = optim.Adam(model.parameters(), lr=0.001)  # 使用统一的学习率
+            margin = hyperparameters.get("margin", 1.0)
+            criterion = TripletLoss(margin=margin)
 
-            # 训练（增加 epoch 数量以提高学习效果）
-            num_epochs = 15
+            learning_rate = hyperparameters.get("learning_rate", 0.001)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+            self.training_status[job_id]["progress"] = 0.30
+
+            # 训练（使用动态epoch数） - 30% - 80%
+            num_epochs = hyperparameters.get("num_epochs", 15)
             total_batches = len(dataloader) * num_epochs
             current_batch = 0
 
+            loss_history = []
+            start_time = datetime.now()
+
             for epoch in range(num_epochs):
+                epoch_losses = []
                 for batch_idx, (images, user_ids) in enumerate(dataloader):
                     images = images.to(device)
 
@@ -228,27 +289,91 @@ class Trainer:
                     optimizer.step()
 
                     current_batch += 1
-                    progress = current_batch / total_batches
+                    # 计算进度: 30% + (current_batch / total_batches) * 0.50 (30% -> 80%)
+                    progress = 0.30 + (current_batch / total_batches) * 0.50
                     self.training_status[job_id]["progress"] = progress
+
+                    epoch_losses.append(loss.item())
 
                     if batch_idx % 10 == 0:
                         logger.info(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item():.4f}")
 
-            # 保存模型
+                # 记录每个epoch的平均损失
+                avg_epoch_loss = np.mean(epoch_losses)
+                loss_history.append(avg_epoch_loss)
+                logger.info(f"Epoch {epoch} 完成, 平均损失: {avg_epoch_loss:.4f}")
+
+            # 计算训练指标 (80% - 85%)
+            self.training_status[job_id]["progress"] = 0.80
+            training_time = (datetime.now() - start_time).total_seconds()
+            avg_loss = np.mean(loss_history)
+
+            # 验证准确率估计（使用最后一个batch的损失）
+            validation_accuracy = max(0.0, 1.0 - avg_loss)  # 简化估计
+
+            # 创建指标对象
+            metrics = TrainingMetrics(
+                loss=avg_loss,
+                validation_accuracy=validation_accuracy,
+                training_time=training_time,
+                model_size=self._get_model_size(model),
+                total_samples=total_samples,
+                unique_users=len(set(s["user_id"] for s in samples))
+            )
+            self.current_metrics = metrics
+
+            logger.info(f"训练完成: {metrics}")
+
+            # 自动评估（如果启用） (85% - 90%)
+            self.training_status[job_id]["progress"] = 0.85
+            if auto_adapt and self.auto_adapter:
+                previous_metrics = self._get_previous_metrics()
+                accepted, eval_message = self.auto_adapter.evaluate_training_result(
+                    metrics,
+                    previous_metrics
+                )
+
+                logger.info(f"自动评估结果: {eval_message}")
+
+                if not accepted and not force_retrain:
+                    logger.warning(f"训练结果未通过评估，回滚到之前的模型")
+                    self.training_status[job_id] = {
+                        "status": "failed",
+                        "progress": 1.0,
+                        "error_message": f"训练评估未通过: {eval_message}"
+                    }
+                    raise ValueError(f"训练评估未通过: {eval_message}")
+
+            # 保存模型 (90% - 92%)
+            self.training_status[job_id]["progress"] = 0.90
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
             # Use a smaller integer for model_version_id (timestamp in seconds)
             import time
             model_version_id = int(time.time())
             self.model_manager.save_model(model, version)
+            self.training_status[job_id]["progress"] = 0.92
 
-            # 提取所有用户特征并更新特征库
-            await self._update_user_features(samples, version)
+            # 提取所有用户特征并更新特征库 (92% - 99%)
+            await self._update_user_features(samples, version, job_id)
+            self.training_status[job_id]["progress"] = 0.99
+
+            # 更新自动适配器状态
+            if auto_adapt and self.auto_adapter:
+                strategy_enum = TrainingStrategy(strategy)
+                self.auto_adapter.update_training_state(samples, metrics, strategy_enum)
 
             self.training_status[job_id] = {
                 "status": "completed",
                 "progress": 1.0,
                 "error_message": None,
-                "model_version_id": model_version_id
+                "model_version_id": model_version_id,
+                "training_metrics": {
+                    "loss": metrics.loss,
+                    "validation_accuracy": metrics.validation_accuracy,
+                    "training_time": metrics.training_time,
+                    "total_samples": metrics.total_samples,
+                    "unique_users": metrics.unique_users
+                }
             }
 
         except Exception as e:
@@ -304,7 +429,7 @@ class Trainer:
 
         return loss.mean()
     
-    async def _update_user_features(self, samples: List[Dict], model_version: str):
+    async def _update_user_features(self, samples: List[Dict], model_version: str, job_id: int):
         """更新用户特征库"""
         try:
             from sqlalchemy import create_engine
@@ -337,7 +462,8 @@ class Trainer:
                     user_samples[user_id] = []
                 user_samples[user_id].append(sample)
 
-            # 首先收集所有训练样本用于PCA训练
+            # 首先收集所有训练样本用于PCA训练 (92% - 94%)
+            self.training_status[job_id]["progress"] = 0.93
             all_training_images = []
             for user_sample_list in user_samples.values():
                 for sample in user_sample_list:
@@ -363,7 +489,9 @@ class Trainer:
                 logger.info(f"用 {features_array.shape[0]} 个样本，{features_array.shape[1]} 维特征训练PCA")
                 feature_fusion.fit_pca(features_array)
 
-            # 为每个用户提取并更新特征（使用已训练的PCA）
+            # 为每个用户提取并更新特征（使用已训练的PCA） (94% - 99%)
+            total_users = len(user_samples)
+            processed_users = 0
             for user_id, user_sample_list in user_samples.items():
                 try:
                     # 批量预处理该用户的所有样本
@@ -427,6 +555,12 @@ class Trainer:
                             )
                         
                         db.commit()
+
+                    # 更新进度: 94% + (processed_users / total_users) * 0.05 (94% -> 99%)
+                    processed_users += 1
+                    progress = 0.94 + (processed_users / total_users) * 0.05
+                    self.training_status[job_id]["progress"] = progress
+
                 except Exception as e:
                     logger.error(f"更新用户 {user_id} 的特征失败: {str(e)}")
                     db.rollback()
@@ -443,6 +577,54 @@ class Trainer:
             "progress": 0.0,
             "error_message": None
         })
+
+    def _get_model_size(self, model: torch.nn.Module) -> float:
+        """获取模型大小（MB）"""
+        param_size = 0
+        for param in model.parameters():
+            param_size += param.nelement() * param.element_size()
+        buffer_size = 0
+        for buffer in model.buffers():
+            buffer_size += buffer.nelement() * buffer.element_size()
+        size_mb = (param_size + buffer_size) / 1024**2
+        return size_mb
+
+    def _get_previous_metrics(self) -> Optional[TrainingMetrics]:
+        """获取之前的训练指标"""
+        if self.auto_adapter and hasattr(self.auto_adapter, "state"):
+            history = self.auto_adapter.state.get("training_history", [])
+            if len(history) >= 2:  # 至少有一次历史记录
+                last_entry = history[-2]
+                metrics_data = last_entry.get("metrics", {})
+                if metrics_data:
+                    return TrainingMetrics(
+                        loss=metrics_data.get("loss", 0.0),
+                        validation_accuracy=metrics_data.get("validation_accuracy", 0.0),
+                        training_time=0.0,  # 历史数据中没有
+                        model_size=0.0,
+                        total_samples=metrics_data.get("total_samples", 0),
+                        unique_users=metrics_data.get("unique_users", 0)
+                    )
+        return None
+
+    async def get_training_recommendation(self) -> Dict:
+        """获取训练建议"""
+        if not self.auto_adapter:
+            return {
+                "should_train": True,
+                "reason": "自动适配未启用",
+                "strategy": "full_retrain"
+            }
+
+        samples = self._load_samples_from_db()
+        if len(samples) < 3:
+            return {
+                "should_train": False,
+                "reason": "样本数量不足",
+                "strategy": None
+            }
+
+        return self.auto_adapter.get_recommendation(samples)
 
     async def update_user_features_incremental(
         self,

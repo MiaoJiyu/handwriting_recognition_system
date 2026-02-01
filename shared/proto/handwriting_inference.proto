@@ -43,6 +43,8 @@ message BatchRecognizeResponse {
 message TrainRequest {
     int32 job_id = 1;                       // 训练任务ID
     bool force_retrain = 2;                 // 是否强制重训练
+    int32 school_id = 3;                    // 学校ID (可选，0表示全部学校)
+    bool incremental = 4;                   // 是否为增量训练
 }
 
 // 训练响应
@@ -93,6 +95,22 @@ message IncrementalFeatureUpdateResponse {
     int32 updated_sample_count = 4;          // 更新的样本数量
 }
 
+// 训练建议请求
+message TrainingRecommendationRequest {
+    // 无参数，基于当前数据状态自动分析
+}
+
+// 训练建议响应
+message TrainingRecommendationResponse {
+    bool should_train = 1;                  // 是否应该训练
+    string strategy = 2;                     // 推荐策略: full_retrain, incremental_fine_tune, no_training
+    string reason = 3;                       // 原因说明
+    string change_type = 4;                  // 数据变化类型
+    float change_ratio = 5;                   // 数据变化比例
+    int32 priority = 6;                      // 优先级 (1-10, 10为最高)
+    string error_message = 7;                // 错误信息（如果有）
+}
+
 // 字迹识别服务
 service HandwritingInference {
     // 单张图片识别
@@ -112,4 +130,7 @@ service HandwritingInference {
 
     // 增量特征更新
     rpc UpdateUserFeaturesIncremental(IncrementalFeatureUpdateRequest) returns (IncrementalFeatureUpdateResponse);
+
+    // 获取训练建议
+    rpc GetTrainingRecommendation(TrainingRecommendationRequest) returns (TrainingRecommendationResponse);
 }

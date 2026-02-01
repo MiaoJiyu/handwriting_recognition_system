@@ -96,12 +96,12 @@ class InferenceClient:
             )
         return results
     
-    async def train_model(self, job_id: int, force_retrain: bool = False) -> dict:
+    async def train_model(self, job_id: int, force_retrain: bool = False, school_id: Optional[int] = None, incremental: bool = False) -> dict:
         """触发训练（对接 gRPC TrainModel）"""
         channel = await self._get_channel()
         if self.stub is None:
             self.stub = pb2_grpc.HandwritingInferenceStub(channel)
-        req = pb2.TrainRequest(job_id=job_id, force_retrain=force_retrain)
+        req = pb2.TrainRequest(job_id=job_id, force_retrain=force_retrain, school_id=school_id or 0, incremental=incremental)
         resp = await self.stub.TrainModel(req)
         return {
             "success": getattr(resp, "success", False),
@@ -133,4 +133,21 @@ class InferenceClient:
         return {
             "success": getattr(resp, "success", False),
             "message": getattr(resp, "message", ""),
+        }
+
+    async def get_training_recommendation(self) -> dict:
+        """获取训练建议（对接 gRPC GetTrainingRecommendation）"""
+        channel = await self._get_channel()
+        if self.stub is None:
+            self.stub = pb2_grpc.HandwritingInferenceStub(channel)
+        req = pb2.TrainingRecommendationRequest()
+        resp = await self.stub.GetTrainingRecommendation(req)
+        return {
+            "should_train": getattr(resp, "should_train", False),
+            "strategy": getattr(resp, "strategy", ""),
+            "reason": getattr(resp, "reason", ""),
+            "change_type": getattr(resp, "change_type", ""),
+            "change_ratio": getattr(resp, "change_ratio", 0.0),
+            "priority": getattr(resp, "priority", 0),
+            "error_message": getattr(resp, "error_message", ""),
         }

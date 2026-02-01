@@ -14,7 +14,7 @@ from ..models.user import User
 from ..utils.dependencies import get_current_user, require_teacher_or_above, CurrentUserResponse
 from ..utils.image_processor import auto_crop_sample_image
 
-router = APIRouter(prefix="/api/samples", tags=["样本管理"])
+router = APIRouter(prefix="/samples", tags=["样本管理"])
 
 
 class UserInfo(BaseModel):

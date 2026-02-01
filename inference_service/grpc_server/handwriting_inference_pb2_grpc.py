@@ -65,10 +65,10 @@ class HandwritingInferenceStub(object):
                 request_serializer=handwriting__inference__pb2.IncrementalFeatureUpdateRequest.SerializeToString,
                 response_deserializer=handwriting__inference__pb2.IncrementalFeatureUpdateResponse.FromString,
                 _registered_method=True)
-        self.AutoCropSample = channel.unary_unary(
-                '/handwriting_inference.HandwritingInference/AutoCropSample',
-                request_serializer=handwriting__inference__pb2.AutoCropRequest.SerializeToString,
-                response_deserializer=handwriting__inference__pb2.AutoCropResponse.FromString,
+        self.GetTrainingRecommendation = channel.unary_unary(
+                '/handwriting_inference.HandwritingInference/GetTrainingRecommendation',
+                request_serializer=handwriting__inference__pb2.TrainingRecommendationRequest.SerializeToString,
+                response_deserializer=handwriting__inference__pb2.TrainingRecommendationResponse.FromString,
                 _registered_method=True)
 
 
@@ -118,8 +118,8 @@ class HandwritingInferenceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def AutoCropSample(self, request, context):
-        """自动裁剪样本
+    def GetTrainingRecommendation(self, request, context):
+        """获取训练建议
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -158,10 +158,10 @@ def add_HandwritingInferenceServicer_to_server(servicer, server):
                     request_deserializer=handwriting__inference__pb2.IncrementalFeatureUpdateRequest.FromString,
                     response_serializer=handwriting__inference__pb2.IncrementalFeatureUpdateResponse.SerializeToString,
             ),
-            'AutoCropSample': grpc.unary_unary_rpc_method_handler(
-                    servicer.AutoCropSample,
-                    request_deserializer=handwriting__inference__pb2.AutoCropRequest.FromString,
-                    response_serializer=handwriting__inference__pb2.AutoCropResponse.SerializeToString,
+            'GetTrainingRecommendation': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTrainingRecommendation,
+                    request_deserializer=handwriting__inference__pb2.TrainingRecommendationRequest.FromString,
+                    response_serializer=handwriting__inference__pb2.TrainingRecommendationResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -338,7 +338,7 @@ class HandwritingInference(object):
             _registered_method=True)
 
     @staticmethod
-    def AutoCropSample(request,
+    def GetTrainingRecommendation(request,
             target,
             options=(),
             channel_credentials=None,
@@ -351,9 +351,9 @@ class HandwritingInference(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/handwriting_inference.HandwritingInference/AutoCropSample',
-            handwriting__inference__pb2.AutoCropRequest.SerializeToString,
-            handwriting__inference__pb2.AutoCropResponse.FromString,
+            '/handwriting_inference.HandwritingInference/GetTrainingRecommendation',
+            handwriting__inference__pb2.TrainingRecommendationRequest.SerializeToString,
+            handwriting__inference__pb2.TrainingRecommendationResponse.FromString,
             options,
             channel_credentials,
             insecure,

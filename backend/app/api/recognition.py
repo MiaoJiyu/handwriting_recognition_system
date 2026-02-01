@@ -11,7 +11,7 @@ from ..models.recognition_log import RecognitionLog
 from ..utils.dependencies import require_teacher_or_above, get_current_user, CurrentUserResponse
 from ..services.inference_client import InferenceClient
 
-router = APIRouter(prefix="/api/recognition", tags=["识别"])
+router = APIRouter(prefix="/recognition", tags=["识别"])
 
 
 class RecognitionResult(BaseModel):

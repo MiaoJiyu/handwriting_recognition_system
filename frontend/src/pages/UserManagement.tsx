@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { PlusOutlined, UploadOutlined, FileExcelOutlined, ExportOutlined, PlusCircleOutlined, DeleteOutlined, LockOutlined, SwapOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
+import { formatDateToLocalZh } from '../utils/datetime';
 
 const { TabPane } = Tabs;
 
@@ -21,6 +22,8 @@ interface Student {
 interface School {
   id: number;
   name: string;
+  created_at: string;
+  user_count?: number;
 }
 
 interface BatchStudentData {
@@ -35,8 +38,9 @@ const UserManagement: React.FC = () => {
   const queryClient = useQueryClient();
 
   // 状态
+  const [activeTab, setActiveTab] = useState<'users' | 'schools'>('users');
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<'create' | 'batch' | 'import' | 'edit' | 'password'>('create');
+  const [modalType, setModalType] = useState<'create' | 'batch' | 'import' | 'edit' | 'password' | 'school_create' | 'school_edit'>('create');
   const [selectedSchool, setSelectedSchool] = useState<number | undefined>();
   const [form] = Form.useForm();
   const [batchForm] = Form.useForm();
@@ -50,6 +54,16 @@ const UserManagement: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [switchModalVisible, setSwitchModalVisible] = useState(false);
   const [switchTargetUser, setSwitchTargetUser] = useState<Student | null>(null);
+  const [batchSchoolModalVisible, setBatchSchoolModalVisible] = useState(false);
+  const [batchPasswordModalVisible, setBatchPasswordModalVisible] = useState(false);
+  const [batchSchoolForm] = Form.useForm();
+  const [batchPasswordForm] = Form.useForm();
+
+  // 学校管理相关状态
+  const [selectedSchoolForManage, setSelectedSchoolForManage] = useState<School | null>(null);
+  const [schoolModalVisible, setSchoolModalVisible] = useState(false);
+  const [schoolModalType, setSchoolModalType] = useState<'create' | 'edit'>('create');
+  const [schoolForm] = Form.useForm();
 
   // 获取用户列表
   const { data: users, isLoading } = useQuery<Student[]>({
@@ -68,6 +82,71 @@ const UserManagement: React.FC = () => {
       return res.data;
     },
     enabled: user?.role === 'system_admin',
+  });
+
+  // 学校管理 - 获取学校列表（带用户数量）
+  const { data: schoolsWithUsers, isLoading: schoolsLoading } = useQuery<School[]>({
+    queryKey: ['schools_with_users'],
+    queryFn: async () => {
+      const res = await api.get('/schools');
+      return res.data;
+    },
+    enabled: activeTab === 'schools' && user?.role === 'system_admin',
+  });
+
+  // 学校管理 - 创建学校
+  const createSchoolMutation = useMutation({
+    mutationFn: async (values: { name: string }) => {
+      const res = await api.post('/schools', values);
+      return res.data;
+    },
+    onSuccess: () => {
+      message.success('学校创建成功');
+      setSchoolModalVisible(false);
+      schoolForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      queryClient.invalidateQueries({ queryKey: ['schools_with_users'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '学校创建失败');
+    },
+  });
+
+  // 学校管理 - 更新学校
+  const updateSchoolMutation = useMutation({
+    mutationFn: async ({ schoolId, values }: { schoolId: number; values: { name: string } }) => {
+      const res = await api.put(`/schools/${schoolId}`, values);
+      return res.data;
+    },
+    onSuccess: () => {
+      message.success('学校更新成功');
+      setSchoolModalVisible(false);
+      setSelectedSchoolForManage(null);
+      schoolForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      queryClient.invalidateQueries({ queryKey: ['schools_with_users'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '学校更新失败');
+    },
+  });
+
+  // 学校管理 - 删除学校
+  const deleteSchoolMutation = useMutation({
+    mutationFn: async (schoolId: number) => {
+      await api.delete(`/schools/${schoolId}`);
+    },
+    onSuccess: () => {
+      message.success('学校删除成功');
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      queryClient.invalidateQueries({ queryKey: ['schools_with_users'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '学校删除失败');
+    },
   });
 
   // 过滤用户（根据选中的学校）
@@ -136,15 +215,75 @@ const UserManagement: React.FC = () => {
   // 批量删除用户
   const batchDeleteMutation = useMutation({
     mutationFn: async (userIds: number[]) => {
-      await Promise.all(userIds.map(id => api.delete(`/users/${id}`)));
+      const res = await api.delete('/users/batch', { data: { user_ids: userIds } });
+      return res.data;
     },
-    onSuccess: () => {
-      message.success(`成功删除 ${selectedRowKeys.length} 个用户`);
+    onSuccess: (data) => {
+      if (data.failed > 0) {
+        message.warning(`批量删除完成：成功 ${data.success} 个，失败 ${data.failed} 个`);
+      } else {
+        message.success(`成功删除 ${data.success} 个用户`);
+      }
       setSelectedRowKeys([]);
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
-    onError: () => {
-      message.error('批量删除失败');
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '批量删除失败');
+    },
+  });
+
+  // 批量设置学校
+  const batchSetSchoolMutation = useMutation({
+    mutationFn: async ({ user_ids, school_id }: { user_ids: number[]; school_id: number }) => {
+      const res = await api.put('/users/batch/school', { user_ids, school_id });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      if (data.failed > 0) {
+        message.warning(`批量设置学校完成：成功 ${data.success} 个，失败 ${data.failed} 个`);
+      } else {
+        message.success(`成功为 ${data.success} 个用户设置学校`);
+      }
+      setBatchSchoolModalVisible(false);
+      batchSchoolForm.resetFields();
+      setSelectedRowKeys([]);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '批量设置学校失败');
+    },
+  });
+
+  // 批量重置密码
+  const batchResetPasswordMutation = useMutation({
+    mutationFn: async ({ user_ids, password }: { user_ids: number[]; password?: string }) => {
+      const params = new URLSearchParams();
+      if (password) {
+        params.append('password', password);
+      }
+      const url = `/users/batch/reset-password${params.toString() ? '?' + params.toString() : ''}`;
+
+      const res = await api.put(url, { user_ids }, { responseType: 'blob' });
+      return res.data;
+    },
+    onSuccess: (data: Blob) => {
+      // 下载Excel文件
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `password_reset_results_${new Date().getTime()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      message.success('密码重置成功，结果已下载');
+      setBatchPasswordModalVisible(false);
+      batchPasswordForm.resetFields();
+      setSelectedRowKeys([]);
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || '批量重置密码失败');
     },
   });
 
@@ -329,7 +468,67 @@ const UserManagement: React.FC = () => {
       message.warning('请至少选择一个用户');
       return;
     }
-    batchDeleteMutation.mutate(selectedRowKeys as number[]);
+    Modal.confirm({
+      title: `确定要删除选中的 ${selectedRowKeys.length} 个用户吗？`,
+      content: '删除后无法恢复，请谨慎操作',
+      okText: '确定',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        batchDeleteMutation.mutate(selectedRowKeys as number[]);
+      },
+    });
+  };
+
+  // 批量设置学校
+  const handleBatchSetSchool = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请至少选择一个用户');
+      return;
+    }
+    setBatchSchoolModalVisible(true);
+  };
+
+  const handleBatchSetSchoolSubmit = () => {
+    const values = batchSchoolForm.getFieldsValue();
+    if (!values.school_id) {
+      message.warning('请选择学校');
+      return;
+    }
+    batchSetSchoolMutation.mutate({
+      user_ids: selectedRowKeys as number[],
+      school_id: values.school_id,
+    });
+  };
+
+  // 批量重置密码
+  const handleBatchResetPassword = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请至少选择一个用户');
+      return;
+    }
+    setBatchPasswordModalVisible(true);
+  };
+
+  const handleBatchResetPasswordSubmit = () => {
+    const values = batchPasswordForm.getFieldsValue();
+    const autoGenerate = values.auto_generate || false;
+    const password = autoGenerate ? undefined : values.password;
+
+    if (!autoGenerate && !password) {
+      message.warning('请输入密码或选择自动生成');
+      return;
+    }
+
+    if (!autoGenerate && password && password.length < 6) {
+      message.warning('密码长度不能少于6位');
+      return;
+    }
+
+    batchResetPasswordMutation.mutate({
+      user_ids: selectedRowKeys as number[],
+      password,
+    });
   };
 
   // 切换用户（系统管理员专用）
@@ -379,6 +578,93 @@ const UserManagement: React.FC = () => {
       message.error(errorMessage);
     }
   };
+
+  // 学校管理相关函数
+  const handleCreateSchool = () => {
+    setSelectedSchoolForManage(null);
+    setSchoolModalType('create');
+    setSchoolModalVisible(true);
+    schoolForm.resetFields();
+  };
+
+  const handleEditSchool = (school: School) => {
+    setSelectedSchoolForManage(school);
+    setSchoolModalType('edit');
+    setSchoolModalVisible(true);
+    schoolForm.setFieldsValue({
+      name: school.name,
+    });
+  };
+
+  const handleDeleteSchool = (schoolId: number) => {
+    deleteSchoolMutation.mutate(schoolId);
+  };
+
+  const handleSchoolSubmit = () => {
+    const values = schoolForm.getFieldsValue();
+    if (selectedSchoolForManage) {
+      updateSchoolMutation.mutate({ schoolId: selectedSchoolForManage.id, values });
+    } else {
+      createSchoolMutation.mutate(values);
+    }
+  };
+
+  // 学校管理表格列
+  const schoolColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
+      title: '学校名称',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: '用户数量',
+      dataIndex: 'user_count',
+      key: 'user_count',
+      width: 120,
+      render: (count: number) => count || 0,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (date: string) => formatDateToLocalZh(date) || '-',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 150,
+      render: (_: any, record: School) => (
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            onClick={() => handleEditSchool(record)}
+          >
+            编辑
+          </Button>
+          <Popconfirm
+            title={`确定要删除学校"${record.name}"吗？`}
+            description="删除学校将同时删除该学校下的所有用户和相关数据"
+            onConfirm={() => handleDeleteSchool(record.id)}
+            okText="确定"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+          >
+            <Button type="link" danger size="small">
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   const columns = [
     {
@@ -438,24 +724,7 @@ const UserManagement: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date: string) => {
-        if (!date) return '-';
-        try {
-          const d = new Date(date);
-          if (isNaN(d.getTime())) return date;
-          return d.toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-          });
-        } catch {
-          return date;
-        }
-      },
+      render: (date: string) => formatDateToLocalZh(date) || '-',
     },
     {
       title: '操作',
@@ -530,7 +799,27 @@ const UserManagement: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <h1>用户管理</h1>
+      <h1>{activeTab === 'schools' ? '学校管理' : '用户管理'}</h1>
+
+      {/* 标签页切换 - 仅系统管理员可见 */}
+      {user?.role === 'system_admin' && (
+        <Card style={{ marginBottom: 16 }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as 'users' | 'schools')}
+            items={[
+              {
+                key: 'users',
+                label: '用户管理',
+              },
+              {
+                key: 'schools',
+                label: '学校管理',
+              },
+            ]}
+          />
+        </Card>
+      )}
 
       {/* 切换状态提示 */}
       {user?.is_switched && (
@@ -551,98 +840,160 @@ const UserManagement: React.FC = () => {
         />
       )}
 
-      {/* 学校管理员和系统管理员可以筛选学校 */}
-      {(user?.role === 'school_admin' || (user?.role === 'system_admin' && !user?.is_switched)) && schools && (
-        <Card style={{ marginBottom: 16 }}>
-          <Space>
-            <span>学校筛选：</span>
-            <Select
-              style={{ width: 200 }}
-              placeholder="选择学校"
-              allowClear
-              onChange={(value) => setSelectedSchool(value)}
-              value={selectedSchool}
-            >
-              {schools.map((school: School) => (
-                <Select.Option key={school.id} value={school.id}>
-                  {school.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Space>
-        </Card>
+      {/* 用户管理标签页内容 */}
+      {activeTab === 'users' && (
+        <>
+          {/* 学校管理员和系统管理员可以筛选学校 */}
+          {(user?.role === 'school_admin' || (user?.role === 'system_admin' && !user?.is_switched)) && schools && (
+            <Card style={{ marginBottom: 16 }}>
+              <Space>
+                <span>学校筛选：</span>
+                <Select
+                  style={{ width: 200 }}
+                  placeholder="选择学校"
+                  allowClear
+                  onChange={(value) => setSelectedSchool(value)}
+                  value={selectedSchool}
+                >
+                  {schools.map((school: School) => (
+                    <Select.Option key={school.id} value={school.id}>
+                      {school.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Space>
+            </Card>
+          )}
+
+          {/* 操作按钮 */}
+          <Card style={{ marginBottom: 16 }}>
+            <Space direction="vertical" size="middle">
+              {/* 第一行按钮 */}
+              <Space size="middle" wrap>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateUser}>
+                  创建用户
+                </Button>
+                <Button icon={<PlusCircleOutlined />} onClick={() => {
+                  setSelectedUser(null);
+                  setModalType('batch');
+                  setModalVisible(true);
+                }}>
+                  批量创建学生
+                </Button>
+                <Button icon={<UploadOutlined />} onClick={() => {
+                  setSelectedUser(null);
+                  setModalType('import');
+                  setModalVisible(true);
+                }}>
+                  导入学生名单
+                </Button>
+                <Button icon={<FileExcelOutlined />} onClick={downloadTemplate}>
+                  下载模板
+                </Button>
+                <Button icon={<ExportOutlined />} onClick={handleExport}>
+                  导出名单
+                </Button>
+                {user?.role === 'system_admin' && !user?.is_switched && (
+                  <Button icon={<SwapOutlined />} onClick={handleSwitchUser}>
+                    切换用户
+                  </Button>
+                )}
+              </Space>
+              {/* 第二行：批量操作按钮 */}
+              {selectedRowKeys.length > 0 && (
+                <Space size="middle" wrap>
+                  {user?.role === 'system_admin' && (
+                    <Button
+                      icon={<SwapOutlined />}
+                      onClick={handleBatchSetSchool}
+                      loading={batchSetSchoolMutation.isPending}
+                    >
+                      批量设置学校
+                    </Button>
+                  )}
+                  {user?.role === 'system_admin' && (
+                    <Button
+                      icon={<LockOutlined />}
+                      onClick={handleBatchResetPassword}
+                      loading={batchResetPasswordMutation.isPending}
+                    >
+                      批量重置密码
+                    </Button>
+                  )}
+                  <Popconfirm
+                    title={`确定要删除选中的 ${selectedRowKeys.length} 个用户吗？`}
+                    onConfirm={handleBatchDelete}
+                    okText="确定"
+                    cancelText="取消"
+                  >
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={batchDeleteMutation.isPending}
+                    >
+                      批量删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              )}
+            </Space>
+          </Card>
+
+          {/* 用户列表 */}
+          <Card>
+            <Table
+              columns={columns}
+              dataSource={filteredUsers}
+              loading={isLoading}
+              rowKey="id"
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (selectedRowKeys: React.Key[]) => {
+                  setSelectedRowKeys(selectedRowKeys);
+                },
+                getCheckboxProps: (record: Student) => ({
+                  // 系统管理员可以删除所有用户，学校管理员只能删除本校用户
+                  disabled: user?.role !== 'system_admin' && (user?.role === 'school_admin' && record.school_id !== user.school_id),
+                }),
+              }}
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 人`,
+              }}
+            />
+          </Card>
+        </>
       )}
 
-      {/* 操作按钮 */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space size="large">
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateUser}>
-            创建用户
-          </Button>
-          <Button icon={<PlusCircleOutlined />} onClick={() => {
-            setSelectedUser(null);
-            setModalType('batch');
-            setModalVisible(true);
-          }}>
-            批量创建学生
-          </Button>
-          <Button icon={<UploadOutlined />} onClick={() => {
-            setSelectedUser(null);
-            setModalType('import');
-            setModalVisible(true);
-          }}>
-            导入学生名单
-          </Button>
-          <Button icon={<FileExcelOutlined />} onClick={downloadTemplate}>
-            下载模板
-          </Button>
-          <Button icon={<ExportOutlined />} onClick={handleExport}>
-            导出名单
-          </Button>
-          {user?.role === 'system_admin' && !user?.is_switched && (
-            <Button icon={<SwapOutlined />} onClick={handleSwitchUser}>
-              切换用户
-            </Button>
-          )}
-          {selectedRowKeys.length > 0 && (
-            <Popconfirm
-              title={`确定要删除选中的 ${selectedRowKeys.length} 个用户吗？`}
-              onConfirm={handleBatchDelete}
-              okText="确定"
-              cancelText="取消"
-            >
-              <Button danger icon={<DeleteOutlined />} loading={batchDeleteMutation.isPending}>
-                批量删除
+      {/* 学校管理标签页内容 - 仅系统管理员 */}
+      {activeTab === 'schools' && user?.role === 'system_admin' && (
+        <>
+          {/* 操作按钮 */}
+          <Card style={{ marginBottom: 16 }}>
+            <Space>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateSchool}>
+                创建学校
               </Button>
-            </Popconfirm>
-          )}
-        </Space>
-      </Card>
+            </Space>
+          </Card>
 
-      {/* 用户列表 */}
-      <Card>
-        <Table
-          columns={columns}
-          dataSource={filteredUsers}
-          loading={isLoading}
-          rowKey="id"
-          rowSelection={{
-            selectedRowKeys,
-            onChange: (selectedRowKeys: React.Key[]) => {
-              setSelectedRowKeys(selectedRowKeys);
-            },
-            getCheckboxProps: (record: Student) => ({
-              // 系统管理员可以删除所有用户，学校管理员只能删除本校用户
-              disabled: user?.role !== 'system_admin' && (user?.role === 'school_admin' && record.school_id !== user.school_id),
-            }),
-          }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 人`,
-          }}
-        />
-      </Card>
+          {/* 学校列表 */}
+          <Card>
+            <Table
+              columns={schoolColumns}
+              dataSource={schoolsWithUsers}
+              loading={schoolsLoading}
+              rowKey="id"
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: true,
+                showTotal: (total) => `共 ${total} 所学校`,
+              }}
+            />
+          </Card>
+        </>
+      )}
 
       {/* 创建/批量创建/导入/编辑/修改密码 模态框 */}
       <Modal
@@ -1090,6 +1441,134 @@ const UserManagement: React.FC = () => {
             description={`切换后将以用户 ${switchTargetUser?.nickname || switchTargetUser?.username || '...'} (ID: ${switchTargetUser?.id}) 的身份进行操作`}
             type="info"
           />
+        </Form>
+      </Modal>
+
+      {/* 学校管理 - 创建/编辑 模态框 */}
+      <Modal
+        title={schoolModalType === 'create' ? '创建学校' : '编辑学校'}
+        open={schoolModalVisible}
+        onCancel={() => {
+          setSchoolModalVisible(false);
+          setSelectedSchoolForManage(null);
+          schoolForm.resetFields();
+        }}
+        onOk={handleSchoolSubmit}
+        okText={schoolModalType === 'create' ? '创建' : '更新'}
+        confirmLoading={createSchoolMutation.isPending || updateSchoolMutation.isPending}
+      >
+        <Form form={schoolForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="学校名称"
+            rules={[
+              { required: true, message: '请输入学校名称' },
+              { max: 100, message: '学校名称不能超过100个字符' },
+            ]}
+          >
+            <Input placeholder="请输入学校名称" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 批量设置学校模态框 */}
+      <Modal
+        title={`批量设置学校 (${selectedRowKeys.length} 个用户)`}
+        open={batchSchoolModalVisible}
+        onCancel={() => {
+          setBatchSchoolModalVisible(false);
+          batchSchoolForm.resetFields();
+        }}
+        onOk={handleBatchSetSchoolSubmit}
+        okText="确定"
+        okButtonProps={{ loading: batchSetSchoolMutation.isPending }}
+      >
+        <Alert
+          message="批量设置学校说明"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li>将为选中的 {selectedRowKeys.length} 个用户设置相同的学校</li>
+              <li>不能修改系统管理员的学校</li>
+              <li>请谨慎操作，确认无误后再提交</li>
+            </ul>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form form={batchSchoolForm} layout="vertical">
+          <Form.Item
+            name="school_id"
+            label="选择学校"
+            rules={[{ required: true, message: '请选择学校' }]}
+          >
+            <Select
+              placeholder="请选择学校"
+              showSearch
+              optionFilterProp="children"
+            >
+              {schools?.map((school: School) => (
+                <Select.Option key={school.id} value={school.id}>
+                  {school.name}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 批量重置密码模态框 */}
+      <Modal
+        title={`批量重置密码 (${selectedRowKeys.length} 个用户)`}
+        open={batchPasswordModalVisible}
+        onCancel={() => {
+          setBatchPasswordModalVisible(false);
+          batchPasswordForm.resetFields();
+        }}
+        onOk={handleBatchResetPasswordSubmit}
+        okText="确定并下载结果"
+        okButtonProps={{ loading: batchResetPasswordMutation.isPending }}
+      >
+        <Alert
+          message="批量重置密码说明"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li>将为选中的 {selectedRowKeys.length} 个用户重置密码</li>
+              <li>不能重置系统管理员的密码</li>
+              <li>不能重置自己的密码</li>
+              <li>操作完成后会自动下载包含新密码的Excel表格</li>
+              <li>请妥善保存下载的密码表格，确认无误后再提交</li>
+            </ul>
+          }
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form form={batchPasswordForm} layout="vertical">
+          <Form.Item name="auto_generate" valuePropName="checked" initialValue={true}>
+            <span>自动生成密码（8位，包含字母和数字）</span>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) =>
+              prevValues.auto_generate !== currentValues.auto_generate
+            }
+          >
+            {({ getFieldValue }) =>
+              !getFieldValue('auto_generate') ? (
+                <Form.Item
+                  name="password"
+                  label="新密码"
+                  rules={[
+                    { required: true, message: '请输入新密码' },
+                    { min: 6, message: '密码长度不能少于6位' },
+                  ]}
+                >
+                  <Input.Password placeholder="请输入新密码（至少6位）" />
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
         </Form>
       </Modal>
     </div>

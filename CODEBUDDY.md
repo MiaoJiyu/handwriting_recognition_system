@@ -9,7 +9,6 @@ This is a handwriting recognition system using Few-shot Learning to identify han
 - **Backend API**: FastAPI-based REST API for authentication, user management, sample management, recognition requests, and training coordination. Located at `backend/`
 - **Inference Service**: Standalone gRPC service for deep learning inference (Siamese Network + Few-shot Learning), image preprocessing, feature extraction, and model training. Located at `inference_service/`
 - **Frontend**: React + TypeScript + Ant Design web interface at `frontend/`
-- **Desktop**: PyQt6 desktop application at `desktop/`
 - **Shared**: Common protobuf definitions and types at `shared/`
 
 ## Documentation
@@ -60,6 +59,8 @@ pytest --cov=app tests/
 # Fix libstdc++ issues in Nix environments
 ./fix_venv.sh  # Recreates venv with system Python
 ```
+
+**Backend Logs**: /tmp/backend.log
 
 **Important**: If you encounter `libstdc++.so.6` or Nix Python-related errors, use `./fix_venv.sh` or `./run_server.sh`. These scripts automatically detect and use system Python instead of Nix Python to avoid library compatibility issues. The backend's `inference_client.py` also includes libstdc++ preloading logic for gRPC.
 
@@ -123,21 +124,6 @@ npm run preview
 npm test                # Run all tests
 npm run test:watch     # Run tests in watch mode
 ```
-
-### Desktop (PyQt6)
-
-```bash
-cd desktop
-
-# Create virtual environment and install dependencies
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Run desktop application
-python main.py
-```
-
 ### Database Setup
 
 ```bash
@@ -215,12 +201,12 @@ docker-compose logs -f --tail=100 backend
 ┌─────────────────────────────────────────────────────┐
 │                      Client Layer                             │
 ├─────────────────┬───────────────────┬───────────────────────┤
-│   Web Frontend  │   Desktop (PyQt6)  │   Mobile (Future)      │
+│   Web Frontend  │   Mobile (Future)  │                       │
 │   (React)       │                   │                        │
 └─────────────────┴───────────────────┴───────────────────────┘
-         │                  │
-         │ HTTP/REST        │ gRPC
-         ▼                  ▼
+         │
+         │ HTTP/REST
+         ▼
 ┌─────────────────┐  ┌─────────────────┬───────────────────────┤
 │   Backend API   │  │  Inference Svc  │
 │   (FastAPI)     │  │◄─┤  (gRPC + PyTorch)│
@@ -651,7 +637,9 @@ backend/app/
 │   ├── recognition.py       # Recognition endpoint
 │   ├── training.py          # Training coordination
 │   ├── schools.py          # School management
-│   └── config.py           # System configuration endpoint
+│   ├── config.py           # System configuration endpoint
+│   ├── system.py           # System management endpoint
+│   └── token.py            # Token API for external integration
 ├── models/
 │   ├── user.py              # User ORM model
 │   ├── school.py            # School ORM model

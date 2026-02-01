@@ -15,7 +15,7 @@ from ..utils.dependencies import (
     CurrentUserResponse
 )
 
-router = APIRouter(prefix="/api/users", tags=["用户管理"])
+router = APIRouter(prefix="/users", tags=["用户管理"])
 
 
 class UserCreate(BaseModel):
@@ -538,6 +538,283 @@ async def batch_create_students(
         success=success,
         failed=failed,
         created_users=created_users
+    )
+
+
+class BatchUpdateSchoolRequest(BaseModel):
+    """批量更新学校"""
+    user_ids: List[int]
+    school_id: int
+
+
+class BatchUpdateResponse(BaseModel):
+    """批量操作响应"""
+    total: int
+    success: int
+    failed: int
+    failed_users: List[dict]
+
+
+@router.put("/batch/school", response_model=BatchUpdateResponse, status_code=status.HTTP_200_OK)
+async def batch_update_school(
+    request: BatchUpdateSchoolRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_system_admin)
+):
+    """批量设置学校（仅系统管理员）"""
+    total = len(request.user_ids)
+    success = 0
+    failed = 0
+    failed_users = []
+
+    for user_id in request.user_ids:
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                failed += 1
+                failed_users.append({
+                    'user_id': user_id,
+                    'error': '用户不存在'
+                })
+                continue
+
+            # 不能修改系统管理员的学校
+            if user.role == UserRole.SYSTEM_ADMIN:
+                failed += 1
+                failed_users.append({
+                    'user_id': user_id,
+                    'username': user.username,
+                    'error': '不能修改系统管理员的学校'
+                })
+                continue
+
+            user.school_id = request.school_id
+            db.commit()
+            db.refresh(user)
+
+            success += 1
+        except Exception as e:
+            failed += 1
+            failed_users.append({
+                'user_id': user_id,
+                'error': str(e)
+            })
+            db.rollback()
+
+    return BatchUpdateResponse(
+        total=total,
+        success=success,
+        failed=failed,
+        failed_users=failed_users
+    )
+
+
+class BatchResetPasswordRequest(BaseModel):
+    """批量重置密码"""
+    user_ids: List[int]
+    password: Optional[str] = None  # 如果不提供，自动生成密码
+
+
+@router.put("/batch/reset-password", status_code=status.HTTP_200_OK)
+async def batch_reset_password(
+    request: BatchResetPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_system_admin)
+):
+    """批量重置密码（仅系统管理员），返回Excel文件"""
+    import io
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+
+    total = len(request.user_ids)
+    results = []
+
+    for user_id in request.user_ids:
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                results.append({
+                    '用户ID': user_id,
+                    '用户名': '-',
+                    '姓名': '-',
+                    '学校ID': '-',
+                    '状态': '失败',
+                    '错误信息': '用户不存在',
+                    '新密码': '-'
+                })
+                continue
+
+            # 不能重置系统管理员的密码
+            if user.role == UserRole.SYSTEM_ADMIN:
+                results.append({
+                    '用户ID': user_id,
+                    '用户名': user.username,
+                    '姓名': user.nickname or '-',
+                    '学校ID': user.school_id or '-',
+                    '状态': '失败',
+                    '错误信息': '不能重置系统管理员的密码',
+                    '新密码': '-'
+                })
+                continue
+
+            # 不能重置自己的密码
+            if user_id == current_user.id:
+                results.append({
+                    '用户ID': user_id,
+                    '用户名': user.username,
+                    '姓名': user.nickname or '-',
+                    '学校ID': user.school_id or '-',
+                    '状态': '失败',
+                    '错误信息': '不能重置自己的密码',
+                    '新密码': '-'
+                })
+                continue
+
+            # 生成或使用提供的密码
+            password = request.password or _generate_password()
+            from ..utils.security import get_password_hash
+            user.password_hash = get_password_hash(password)
+            db.commit()
+            db.refresh(user)
+
+            results.append({
+                '用户ID': user_id,
+                '用户名': user.username,
+                '姓名': user.nickname or '-',
+                '学校ID': user.school_id or '-',
+                '状态': '成功',
+                '错误信息': '-',
+                '新密码': password
+            })
+        except Exception as e:
+            results.append({
+                '用户ID': user_id,
+                '用户名': '-',
+                '姓名': '-',
+                '学校ID': '-',
+                '状态': '失败',
+                '错误信息': str(e),
+                '新密码': '-'
+            })
+            db.rollback()
+
+    # 创建工作簿
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "密码重置结果"
+
+    # 添加表头
+    headers = list(results[0].keys()) if results else ['用户ID', '用户名', '姓名', '学校ID', '状态', '错误信息', '新密码']
+    ws.append(headers)
+
+    # 添加数据
+    for row in results:
+        ws.append([row.get(header, '') for header in headers])
+
+    # 调整列宽
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+
+    # 统计信息
+    success_count = len([r for r in results if r['状态'] == '成功'])
+    failed_count = len([r for r in results if r['状态'] == '失败'])
+
+    # 添加统计行
+    ws.append([])
+    ws.append(['总计', total])
+    ws.append(['成功', success_count])
+    ws.append(['失败', failed_count])
+    ws.append(['操作人', f"{current_user.username} ({current_user.nickname or '-'})"])
+    ws.append(['操作时间', datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+
+    # 保存到内存
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"password_reset_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除用户"""
+    user_ids: List[int]
+
+
+@router.delete("/batch", response_model=BatchUpdateResponse, status_code=status.HTTP_200_OK)
+async def batch_delete_users(
+    request: BatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_system_admin)
+):
+    """批量删除用户（仅系统管理员）"""
+    total = len(request.user_ids)
+    success = 0
+    failed = 0
+    failed_users = []
+
+    for user_id in request.user_ids:
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                failed += 1
+                failed_users.append({
+                    'user_id': user_id,
+                    'error': '用户不存在'
+                })
+                continue
+
+            # 不能删除自己
+            if user_id == current_user.id:
+                failed += 1
+                failed_users.append({
+                    'user_id': user_id,
+                    'username': user.username,
+                    'error': '不能删除自己'
+                })
+                continue
+
+            # 不能删除系统管理员
+            if user.role == UserRole.SYSTEM_ADMIN:
+                failed += 1
+                failed_users.append({
+                    'user_id': user_id,
+                    'username': user.username,
+                    'error': '不能删除系统管理员'
+                })
+                continue
+
+            db.delete(user)
+            db.commit()
+
+            success += 1
+        except Exception as e:
+            failed += 1
+            failed_users.append({
+                'user_id': user_id,
+                'error': str(e)
+            })
+            db.rollback()
+
+    return BatchUpdateResponse(
+        total=total,
+        success=success,
+        failed=failed,
+        failed_users=failed_users
     )
 
 

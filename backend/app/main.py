@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
+from contextlib import asynccontextmanager
 from .core.config import settings
 import os
 from .api import (
@@ -12,13 +13,42 @@ from .api import (
     schools_router,
     samples_router,
     config_router,
-    system_router
+    system_router,
+    token_router,
+    tokens_router,
+    token_management_router,
+    scheduled_tasks_router
 )
+from .services.task_scheduler import task_scheduler
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时
+    print("Starting task scheduler...")
+    try:
+        await task_scheduler.start()
+        print("Task scheduler started successfully")
+    except Exception as e:
+        print(f"Failed to start task scheduler: {e}")
+
+    yield
+
+    # 关闭时
+    print("Stopping task scheduler...")
+    try:
+        await task_scheduler.stop()
+        print("Task scheduler stopped successfully")
+    except Exception as e:
+        print(f"Failed to stop task scheduler: {e}")
+
 
 app = FastAPI(
     title="字迹识别系统API",
     description="基于Few-shot Learning的字迹识别系统后端API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS配置
@@ -82,15 +112,19 @@ os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(settings.SAMPLES_DIR, exist_ok=True)
 app.mount("/uploads", CORSStaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-# 注册路由
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(training_router)
-app.include_router(recognition_router)
-app.include_router(schools_router)
-app.include_router(samples_router)
-app.include_router(config_router)
-app.include_router(system_router)
+# 注册路由（统一添加 /api 前缀）
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(training_router, prefix="/api")
+app.include_router(recognition_router, prefix="/api")
+app.include_router(schools_router, prefix="/api")
+app.include_router(samples_router, prefix="/api")
+app.include_router(config_router, prefix="/api")
+app.include_router(system_router, prefix="/api")
+app.include_router(token_router, prefix="/api")
+app.include_router(tokens_router, prefix="/api")
+app.include_router(token_management_router, prefix="/api")
+app.include_router(scheduled_tasks_router, prefix="/api")
 
 
 @app.get("/")

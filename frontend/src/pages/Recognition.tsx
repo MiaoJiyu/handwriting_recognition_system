@@ -5,11 +5,15 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { configService } from '../services/config';
 import type { UploadFile } from 'antd';
+import ImagePreview from '../components/ImagePreview';
 
 const Recognition: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
   const [result, setResult] = useState<any>(null);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imagePreviewTitle, setImagePreviewTitle] = useState('');
 
   // 获取系统配置
   const { data: config } = useQuery({
@@ -125,7 +129,29 @@ const Recognition: React.FC = () => {
             </Upload>
             {previewImage && (
               <div style={{ marginTop: 16 }}>
-                <Image src={previewImage} alt="预览" style={{ maxHeight: 400 }} />
+                <div style={{ marginBottom: 8 }}>
+                  <Button
+                    type="link"
+                    onClick={() => {
+                      setImagePreviewUrl(previewImage);
+                      setImagePreviewTitle('上传的图片');
+                      setImagePreviewVisible(true);
+                    }}
+                    style={{ padding: 0 }}
+                  >
+                    点击查看大图
+                  </Button>
+                </div>
+                <Image
+                  src={previewImage}
+                  alt="预览"
+                  style={{ maxHeight: 400, cursor: 'pointer' }}
+                  onClick={() => {
+                    setImagePreviewUrl(previewImage);
+                    setImagePreviewTitle('上传的图片');
+                    setImagePreviewVisible(true);
+                  }}
+                />
               </div>
             )}
             <div style={{ marginTop: 16 }}>
@@ -170,6 +196,17 @@ const Recognition: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <ImagePreview
+        visible={imagePreviewVisible}
+        imageUrl={imagePreviewUrl}
+        imageTitle={imagePreviewTitle}
+        onClose={() => {
+          setImagePreviewVisible(false);
+          setImagePreviewUrl('');
+          setImagePreviewTitle('');
+        }}
+      />
     </div>
   );
 };

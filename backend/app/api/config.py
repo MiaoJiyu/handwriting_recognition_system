@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from ..core.config import settings
 
-router = APIRouter(prefix="/api/config", tags=["配置"])
+router = APIRouter(prefix="/config", tags=["配置"])
 
 
 class ConfigResponse(BaseModel):

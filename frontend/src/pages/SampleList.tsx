@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { DeleteOutlined, ScissorOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import ImageCropper from '../components/ImageCropper';
+import ImagePreview from '../components/ImagePreview';
+import { formatDateToLocal } from '../utils/datetime';
 
 // 辅助函数：将后端返回的 image_path 转换为可访问的 URL
 const getImageUrl = (imagePath: string | null): string => {
@@ -56,6 +58,9 @@ const SampleList: React.FC = () => {
   const [viewMode, setViewMode] = useState<string | number>('list');
   const [cropperVisible, setCropperVisible] = useState(false);
   const [selectedSample, setSelectedSample] = useState<Sample | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState('');
+  const [previewImageTitle, setPreviewImageTitle] = useState('');
 
   const { data: samples, isLoading } = useQuery({
     queryKey: ['samples'],
@@ -200,25 +205,15 @@ const SampleList: React.FC = () => {
       dataIndex: 'original_filename',
       key: 'original_filename',
       render: (filename: string, record: Sample) => (
-        <a onClick={() => {
-        const url = record.image_url || getImageUrl(record.image_path);
-        const img = window.document.createElement('img');
-        img.src = url;
-        img.onload = () => {
-          const win = window.open('', '_blank');
-          if (win) {
-              win.document.write(`
-                <html>
-                  <head><title>${filename}</title></head>
-                  <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f0f0f0;">
-                    <img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;" />
-                  </body>
-                </html>
-              `);
-              win.document.close();
-            }
-          };
-        }}>
+        <a
+          onClick={() => {
+            const url = record.image_url || getImageUrl(record.image_path);
+            setPreviewImageUrl(url);
+            setPreviewImageTitle(filename);
+            setPreviewVisible(true);
+          }}
+          style={{ cursor: 'pointer', color: '#1890ff' }}
+        >
           {filename}
         </a>
       ),
@@ -234,7 +229,7 @@ const SampleList: React.FC = () => {
       title: '上传时间',
       dataIndex: 'uploaded_at',
       key: 'uploaded_at',
-      render: (date: string) => new Date(date).toLocaleString(),
+      render: (date: string) => formatDateToLocal(date) || '-',
     },
     {
       title: '操作',
@@ -307,7 +302,19 @@ const SampleList: React.FC = () => {
             >
               <Card.Meta
                 title={
-                  <span style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      wordBreak: 'break-all',
+                      cursor: 'pointer',
+                      color: '#1890ff'
+                    }}
+                    onClick={() => {
+                      setPreviewImageUrl(displayImageUrl);
+                      setPreviewImageTitle(sample.original_filename);
+                      setPreviewVisible(true);
+                    }}
+                  >
                     {sample.original_filename.length > 20
                       ? sample.original_filename.substring(0, 20) + '...'
                       : sample.original_filename}
@@ -375,6 +382,17 @@ const SampleList: React.FC = () => {
           initialCropArea={getSavedCropArea() || undefined}
         />
       )}
+
+      <ImagePreview
+        visible={previewVisible}
+        imageUrl={previewImageUrl}
+        imageTitle={previewImageTitle}
+        onClose={() => {
+          setPreviewVisible(false);
+          setPreviewImageUrl('');
+          setPreviewImageTitle('');
+        }}
+      />
     </div>
   );
 };

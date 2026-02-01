@@ -13,6 +13,8 @@ redis>=5.0.1
 celery>=5.3.4
 grpcio>=1.59.3
 grpcio-tools>=1.59.3
+apscheduler>=3.10.4
+croniter>=2.0.1
 pillow>=10.2.0
 opencv-python>=4.8.1.78
 # PaddleOCR版本限制 - 使用2.6.x系列以匹配兼容性

@@ -6,6 +6,10 @@ from .schools import router as schools_router
 from .samples import router as samples_router
 from .config import router as config_router
 from .system import router as system_router
+from .token import router as token_router
+from .tokens import router as tokens_router
+from .token_management import router as token_management_router
+from .scheduled_tasks import router as scheduled_tasks_router
 
 __all__ = [
     "auth_router",
@@ -15,5 +19,9 @@ __all__ = [
     "schools_router",
     "samples_router",
     "config_router",
-    "system_router"
+    "system_router",
+    "token_router",
+    "tokens_router",
+    "token_management_router",
+    "scheduled_tasks_router"
 ]

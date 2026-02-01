@@ -10,6 +10,8 @@ import {
   SettingOutlined,
   LogoutOutlined,
   ControlOutlined,
+  KeyOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -58,24 +60,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         key: '/training',
         icon: <SettingOutlined />,
         label: '训练管理',
-      }
-    );
-  }
-
-  if (user && user.role === 'system_admin') {
-    menuItems.push(
+      },
       {
-        key: '/system',
-        icon: <ControlOutlined />,
-        label: '系统管理',
+        key: '/scheduled-tasks',
+        icon: <ClockCircleOutlined />,
+        label: '定时训练',
       }
     );
   }
 
   const userMenuItems = [
     {
+      key: 'user-center',
+      icon: React.createElement(UserOutlined),
+      label: '用户中心',
+      onClick: () => navigate('/user-center'),
+    },
+    ...(user?.role === 'system_admin' ? [
+      {
+        key: 'system',
+        icon: React.createElement(ControlOutlined),
+        label: '系统管理',
+        onClick: () => navigate('/system'),
+      },
+      {
+        type: 'divider' as const,
+      },
+    ] : []),
+    {
+      key: 'tokens',
+      icon: React.createElement(KeyOutlined),
+      label: 'Token 管理',
+      onClick: () => navigate('/tokens'),
+    },
+    {
+      type: 'divider' as const,
+    },
+    {
       key: 'logout',
-      icon: <LogoutOutlined />,
+      icon: React.createElement(LogoutOutlined),
       label: '退出登录',
       onClick: () => {
         logout();

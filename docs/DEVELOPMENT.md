@@ -21,7 +21,7 @@
 
 | 软件 | 版本要求 | 说明 |
 |------|---------|------|
-| Python | 3.10+ | 后端、推理服务、桌面端 |
+| Python | 3.10+ | 后端、推理服务 |
 | Node.js | 18+ | 前端开发 |
 | MySQL | 8.0+ | 主数据库 |
 | Redis | 6.0+ | 缓存服务 |
@@ -67,12 +67,12 @@ axios@^1.6.0
 ┌─────────────────────────────────────────────────────────────┐
 │                      客户端层                                │
 ├─────────────────┬───────────────────┬───────────────────────┤
-│   Web前端       │   桌面端(PyQt6)    │    移动端(未来)        │
+│   Web前端       │   移动端(未来)     │                       │
 │   (React)       │                   │                       │
-└────────┬────────┴─────────┬─────────┴───────────────────────┘
-         │                  │
-         │ HTTP/REST        │ gRPC
-         ▼                  ▼
+└────────┬────────┴─────────────────┴───────────────────────┘
+         │
+         │ HTTP/REST
+         ▼
 ┌─────────────────┐  ┌─────────────────┐
 │   API网关       │  │   推理服务       │
 │   (FastAPI)     │◄─┤   (gRPC)        │
@@ -145,13 +145,6 @@ handwriting_recognition_system/
 │   │   ├── contexts/          # React上下文
 │   │   └── types/             # TypeScript类型
 │   └── package.json
-│
-├── desktop/                    # PyQt6桌面端
-│   ├── ui/
-│   │   └── main_window.py     # 主窗口（含拖拽、历史）
-│   ├── api_client/
-│   │   └── grpc_client.py     # gRPC客户端
-│   └── requirements.txt
 │
 ├── shared/                     # 共享模块
 │   ├── proto/                 # Protobuf定义
@@ -299,22 +292,6 @@ npm run dev
 ```
 
 前端将在 http://localhost:5173 启动。
-
-### 步骤7: 启动桌面端（可选）
-
-```bash
-cd desktop
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动桌面应用
-python main.py
-```
 
 ### 注意事项
 

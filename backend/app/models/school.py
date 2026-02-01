@@ -13,3 +13,4 @@ class School(Base):
 
     # Relationships
     users = relationship("User", back_populates="school")
+    scheduled_tasks = relationship("ScheduledTask", back_populates="school", cascade="all, delete-orphan")

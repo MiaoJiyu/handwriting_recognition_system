@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bhandwriting_inference.proto\x12\x15handwriting_inference\"E\n\x11RecognitionResult\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\x10\n\x08username\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x02\"]\n\x10RecognizeRequest\x12\x14\n\nimage_path\x18\x01 \x01(\tH\x00\x12\x14\n\nimage_data\x18\x02 \x01(\x0cH\x00\x12\r\n\x05top_k\x18\x03 \x01(\x05\x42\x0e\n\x0cimage_source\"\x8b\x01\n\x11RecognizeResponse\x12\x37\n\x05top_k\x18\x01 \x03(\x0b\x32(.handwriting_inference.RecognitionResult\x12\x12\n\nis_unknown\x18\x02 \x01(\x08\x12\x12\n\nconfidence\x18\x03 \x01(\x02\x12\x15\n\rerror_message\x18\x04 \x01(\t\"O\n\x15\x42\x61tchRecognizeRequest\x12\x13\n\x0bimage_paths\x18\x01 \x03(\t\x12\x12\n\nimage_data\x18\x02 \x03(\x0c\x12\r\n\x05top_k\x18\x03 \x01(\x05\"j\n\x16\x42\x61tchRecognizeResponse\x12\x39\n\x07results\x18\x01 \x03(\x0b\x32(.handwriting_inference.RecognizeResponse\x12\x15\n\rerror_message\x18\x02 \x01(\t\"5\n\x0cTrainRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x05\x12\x15\n\rforce_retrain\x18\x02 \x01(\x08\"A\n\rTrainResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0e\n\x06job_id\x18\x03 \x01(\x05\"\'\n\x15TrainingStatusRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x05\"k\n\x16TrainingStatusResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x10\n\x08progress\x18\x02 \x01(\x02\x12\x18\n\x10model_version_id\x18\x03 \x01(\x05\x12\x15\n\rerror_message\x18\x04 \x01(\t\"Y\n\x13\x43onfigUpdateRequest\x12\x1c\n\x14similarity_threshold\x18\x01 \x01(\x02\x12\x15\n\rgap_threshold\x18\x02 \x01(\x02\x12\r\n\x05top_k\x18\x03 \x01(\x05\"2\n\x0e\x43onfigResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"a\n\x1fIncrementalFeatureUpdateRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\x13\n\x0bimage_paths\x18\x02 \x03(\t\x12\x18\n\x10use_existing_pca\x18\x03 \x01(\x08\"s\n IncrementalFeatureUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\x05\x12\x1c\n\x14updated_sample_count\x18\x04 \x01(\x05\"$\n\x0f\x41utoCropRequest\x12\x11\n\tsample_id\x18\x01 \x01(\x05\"\x91\x01\n\x10\x41utoCropResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x11\n\tsample_id\x18\x03 \x01(\x05\x12\x30\n\x04\x62\x62ox\x18\x04 \x01(\x0b\x32\".handwriting_inference.BoundingBox\x12\x16\n\x0e\x65xtracted_path\x18\x05 \x01(\t\"B\n\x0b\x42oundingBox\x12\t\n\x01x\x18\x01 \x01(\x05\x12\t\n\x01y\x18\x02 \x01(\x05\x12\r\n\x05width\x18\x03 \x01(\x05\x12\x0e\n\x06height\x18\x04 \x01(\x05\x32\x89\x06\n\x14HandwritingInference\x12^\n\tRecognize\x12\'.handwriting_inference.RecognizeRequest\x1a(.handwriting_inference.RecognizeResponse\x12m\n\x0e\x42\x61tchRecognize\x12,.handwriting_inference.BatchRecognizeRequest\x1a-.handwriting_inference.BatchRecognizeResponse\x12W\n\nTrainModel\x12#.handwriting_inference.TrainRequest\x1a$.handwriting_inference.TrainResponse\x12p\n\x11GetTrainingStatus\x12,.handwriting_inference.TrainingStatusRequest\x1a-.handwriting_inference.TrainingStatusResponse\x12\x61\n\x0cUpdateConfig\x12*.handwriting_inference.ConfigUpdateRequest\x1a%.handwriting_inference.ConfigResponse\x12\x90\x01\n\x1dUpdateUserFeaturesIncremental\x12\x36.handwriting_inference.IncrementalFeatureUpdateRequest\x1a\x37.handwriting_inference.IncrementalFeatureUpdateResponse\x12\x61\n\x0e\x41utoCropSample\x12&.handwriting_inference.AutoCropRequest\x1a\'.handwriting_inference.AutoCropResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bhandwriting_inference.proto\x12\x15handwriting_inference\"E\n\x11RecognitionResult\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\x10\n\x08username\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x02\"]\n\x10RecognizeRequest\x12\x14\n\nimage_path\x18\x01 \x01(\tH\x00\x12\x14\n\nimage_data\x18\x02 \x01(\x0cH\x00\x12\r\n\x05top_k\x18\x03 \x01(\x05\x42\x0e\n\x0cimage_source\"\x8b\x01\n\x11RecognizeResponse\x12\x37\n\x05top_k\x18\x01 \x03(\x0b\x32(.handwriting_inference.RecognitionResult\x12\x12\n\nis_unknown\x18\x02 \x01(\x08\x12\x12\n\nconfidence\x18\x03 \x01(\x02\x12\x15\n\rerror_message\x18\x04 \x01(\t\"O\n\x15\x42\x61tchRecognizeRequest\x12\x13\n\x0bimage_paths\x18\x01 \x03(\t\x12\x12\n\nimage_data\x18\x02 \x03(\x0c\x12\r\n\x05top_k\x18\x03 \x01(\x05\"j\n\x16\x42\x61tchRecognizeResponse\x12\x39\n\x07results\x18\x01 \x03(\x0b\x32(.handwriting_inference.RecognizeResponse\x12\x15\n\rerror_message\x18\x02 \x01(\t\"]\n\x0cTrainRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x05\x12\x15\n\rforce_retrain\x18\x02 \x01(\x08\x12\x11\n\tschool_id\x18\x03 \x01(\x05\x12\x13\n\x0bincremental\x18\x04 \x01(\x08\"A\n\rTrainResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0e\n\x06job_id\x18\x03 \x01(\x05\"\'\n\x15TrainingStatusRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\x05\"k\n\x16TrainingStatusResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x10\n\x08progress\x18\x02 \x01(\x02\x12\x18\n\x10model_version_id\x18\x03 \x01(\x05\x12\x15\n\rerror_message\x18\x04 \x01(\t\"Y\n\x13\x43onfigUpdateRequest\x12\x1c\n\x14similarity_threshold\x18\x01 \x01(\x02\x12\x15\n\rgap_threshold\x18\x02 \x01(\x02\x12\r\n\x05top_k\x18\x03 \x01(\x05\"2\n\x0e\x43onfigResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"a\n\x1fIncrementalFeatureUpdateRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\x13\n\x0bimage_paths\x18\x02 \x03(\t\x12\x18\n\x10use_existing_pca\x18\x03 \x01(\x08\"s\n IncrementalFeatureUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\x05\x12\x1c\n\x14updated_sample_count\x18\x04 \x01(\x05\"\x1f\n\x1dTrainingRecommendationRequest\"\xac\x01\n\x1eTrainingRecommendationResponse\x12\x14\n\x0cshould_train\x18\x01 \x01(\x08\x12\x10\n\x08strategy\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\x12\x13\n\x0b\x63hange_type\x18\x04 \x01(\t\x12\x14\n\x0c\x63hange_ratio\x18\x05 \x01(\x02\x12\x10\n\x08priority\x18\x06 \x01(\x05\x12\x15\n\rerror_message\x18\x07 \x01(\t2\xb1\x06\n\x14HandwritingInference\x12^\n\tRecognize\x12\'.handwriting_inference.RecognizeRequest\x1a(.handwriting_inference.RecognizeResponse\x12m\n\x0e\x42\x61tchRecognize\x12,.handwriting_inference.BatchRecognizeRequest\x1a-.handwriting_inference.BatchRecognizeResponse\x12W\n\nTrainModel\x12#.handwriting_inference.TrainRequest\x1a$.handwriting_inference.TrainResponse\x12p\n\x11GetTrainingStatus\x12,.handwriting_inference.TrainingStatusRequest\x1a-.handwriting_inference.TrainingStatusResponse\x12\x61\n\x0cUpdateConfig\x12*.handwriting_inference.ConfigUpdateRequest\x1a%.handwriting_inference.ConfigResponse\x12\x90\x01\n\x1dUpdateUserFeaturesIncremental\x12\x36.handwriting_inference.IncrementalFeatureUpdateRequest\x1a\x37.handwriting_inference.IncrementalFeatureUpdateResponse\x12\x88\x01\n\x19GetTrainingRecommendation\x12\x34.handwriting_inference.TrainingRecommendationRequest\x1a\x35.handwriting_inference.TrainingRecommendationResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,27 +42,25 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_BATCHRECOGNIZERESPONSE']._serialized_start=443
   _globals['_BATCHRECOGNIZERESPONSE']._serialized_end=549
   _globals['_TRAINREQUEST']._serialized_start=551
-  _globals['_TRAINREQUEST']._serialized_end=604
-  _globals['_TRAINRESPONSE']._serialized_start=606
-  _globals['_TRAINRESPONSE']._serialized_end=671
-  _globals['_TRAININGSTATUSREQUEST']._serialized_start=673
-  _globals['_TRAININGSTATUSREQUEST']._serialized_end=712
-  _globals['_TRAININGSTATUSRESPONSE']._serialized_start=714
-  _globals['_TRAININGSTATUSRESPONSE']._serialized_end=821
-  _globals['_CONFIGUPDATEREQUEST']._serialized_start=823
-  _globals['_CONFIGUPDATEREQUEST']._serialized_end=912
-  _globals['_CONFIGRESPONSE']._serialized_start=914
-  _globals['_CONFIGRESPONSE']._serialized_end=964
-  _globals['_INCREMENTALFEATUREUPDATEREQUEST']._serialized_start=966
-  _globals['_INCREMENTALFEATUREUPDATEREQUEST']._serialized_end=1063
-  _globals['_INCREMENTALFEATUREUPDATERESPONSE']._serialized_start=1065
-  _globals['_INCREMENTALFEATUREUPDATERESPONSE']._serialized_end=1180
-  _globals['_AUTOCROPREQUEST']._serialized_start=1182
-  _globals['_AUTOCROPREQUEST']._serialized_end=1218
-  _globals['_AUTOCROPRESPONSE']._serialized_start=1221
-  _globals['_AUTOCROPRESPONSE']._serialized_end=1366
-  _globals['_BOUNDINGBOX']._serialized_start=1368
-  _globals['_BOUNDINGBOX']._serialized_end=1434
-  _globals['_HANDWRITINGINFERENCE']._serialized_start=1437
-  _globals['_HANDWRITINGINFERENCE']._serialized_end=2214
+  _globals['_TRAINREQUEST']._serialized_end=644
+  _globals['_TRAINRESPONSE']._serialized_start=646
+  _globals['_TRAINRESPONSE']._serialized_end=711
+  _globals['_TRAININGSTATUSREQUEST']._serialized_start=713
+  _globals['_TRAININGSTATUSREQUEST']._serialized_end=752
+  _globals['_TRAININGSTATUSRESPONSE']._serialized_start=754
+  _globals['_TRAININGSTATUSRESPONSE']._serialized_end=861
+  _globals['_CONFIGUPDATEREQUEST']._serialized_start=863
+  _globals['_CONFIGUPDATEREQUEST']._serialized_end=952
+  _globals['_CONFIGRESPONSE']._serialized_start=954
+  _globals['_CONFIGRESPONSE']._serialized_end=1004
+  _globals['_INCREMENTALFEATUREUPDATEREQUEST']._serialized_start=1006
+  _globals['_INCREMENTALFEATUREUPDATEREQUEST']._serialized_end=1103
+  _globals['_INCREMENTALFEATUREUPDATERESPONSE']._serialized_start=1105
+  _globals['_INCREMENTALFEATUREUPDATERESPONSE']._serialized_end=1220
+  _globals['_TRAININGRECOMMENDATIONREQUEST']._serialized_start=1222
+  _globals['_TRAININGRECOMMENDATIONREQUEST']._serialized_end=1253
+  _globals['_TRAININGRECOMMENDATIONRESPONSE']._serialized_start=1256
+  _globals['_TRAININGRECOMMENDATIONRESPONSE']._serialized_end=1428
+  _globals['_HANDWRITINGINFERENCE']._serialized_start=1431
+  _globals['_HANDWRITINGINFERENCE']._serialized_end=2248
 # @@protoc_insertion_point(module_scope)

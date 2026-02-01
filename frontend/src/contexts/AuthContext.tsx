@@ -9,6 +9,7 @@ interface User {
   school_id: number | null;
   is_switched?: boolean;  // 是否为切换后的用户
   original_user_id?: number;  // 原始管理员用户ID
+  created_at?: string;  // 添加创建时间字段
 }
 
 interface AuthContextType {

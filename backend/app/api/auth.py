@@ -10,7 +10,7 @@ from ..models.user import User
 from ..utils.security import verify_password, get_password_hash, create_access_token
 from ..utils.dependencies import get_current_user, CurrentUserResponse, _get_current_user
 
-router = APIRouter(prefix="/api/auth", tags=["认证"])
+router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 class Token(BaseModel):
@@ -151,5 +151,49 @@ async def logout(original_user: User = Depends(_get_current_user), db: Session =
     # 如果需要服务端强制失效，可以使用Redis存储黑名单
     return LogoutResponse(
         message="登出成功",
+        success=True
+    )
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class PasswordChangeResponse(BaseModel):
+    message: str
+    success: bool
+
+
+@router.post("/change-password", response_model=PasswordChangeResponse)
+async def change_password(
+    password_data: PasswordChangeRequest,
+    current_user: User = Depends(_get_current_user),
+    db: Session = Depends(get_db)
+):
+    """修改当前用户密码
+
+    需要验证旧密码是否正确，然后更新为新密码。
+    """
+    # 验证旧密码
+    if not verify_password(password_data.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="原密码错误，请重新输入"
+        )
+
+    # 验证新密码长度
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码长度不能少于6位"
+        )
+
+    # 更新密码
+    current_user.password_hash = get_password_hash(password_data.new_password)
+    db.commit()
+
+    return PasswordChangeResponse(
+        message="密码修改成功",
         success=True
     )

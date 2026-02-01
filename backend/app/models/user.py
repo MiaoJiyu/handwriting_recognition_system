@@ -33,3 +33,5 @@ class User(Base):
     samples = relationship("Sample", back_populates="user", cascade="all, delete-orphan")
     recognition_logs = relationship("RecognitionLog", back_populates="user")
     user_features = relationship("UserFeature", back_populates="user", cascade="all, delete-orphan")
+    api_tokens = relationship("ApiToken", back_populates="user", cascade="all, delete-orphan")
+    scheduled_tasks = relationship("ScheduledTask", back_populates="creator", cascade="all, delete-orphan")

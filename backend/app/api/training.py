@@ -1,8 +1,8 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, field_serializer
+from datetime import datetime, timezone
 from ..core.database import get_db
 from ..models.training_job import TrainingJob, TrainingJobStatus
 from ..models.model import Model
@@ -10,7 +10,7 @@ from ..utils.dependencies import require_teacher_or_above, get_current_user, Cur
 import grpc
 from ..services.inference_client import InferenceClient
 
-router = APIRouter(prefix="/api/training", tags=["训练管理"])
+router = APIRouter(prefix="/training", tags=["训练管理"])
 
 
 class TrainingJobResponse(BaseModel):
@@ -25,6 +25,16 @@ class TrainingJobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer('created_at', 'started_at', 'completed_at')
+    def serialize_datetime(self, dt: Optional[datetime], _info):
+        if dt is None:
+            return None
+        # Ensure datetime is timezone-aware and convert to ISO format
+        if dt.tzinfo is None:
+            # If datetime is naive, treat it as UTC
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
 
 class TrainingJobCreate(BaseModel):
@@ -67,7 +77,7 @@ async def start_training(
         client = InferenceClient()
         await client.train_model(job.id, force_retrain=training_data.force_retrain)
         job.status = TrainingJobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(job)
     except grpc.aio.AioRpcError as e:
@@ -113,26 +123,26 @@ async def list_training_jobs(
                     job.status = TrainingJobStatus.RUNNING if mapped == "running" else TrainingJobStatus.PENDING
                     job.progress = float(s.get("progress") or 0.0)
                     if job.status == TrainingJobStatus.RUNNING and job.started_at is None:
-                        job.started_at = datetime.utcnow()
+                        job.started_at = datetime.now(timezone.utc)
                 elif mapped in ("completed", "success"):
                     job.status = TrainingJobStatus.COMPLETED
                     job.progress = 1.0
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(timezone.utc)
                 elif mapped in ("failed", "error"):
                     job.status = TrainingJobStatus.FAILED
                     job.progress = float(s.get("progress") or 0.0)
                     job.error_message = s.get("error_message") or job.error_message
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(timezone.utc)
                 db.commit()
             except grpc.aio.AioRpcError as e:
                 job.status = TrainingJobStatus.FAILED
                 job.error_message = f"gRPC错误: {e.code().name}: {e.details()}"
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
             except Exception as e:
                 job.status = TrainingJobStatus.FAILED
                 job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
 
     return jobs
@@ -156,3 +166,19 @@ async def list_models(
         }
         for m in models
     ]
+
+
+@router.get("/recommendation")
+async def get_training_recommendation(
+    current_user = Depends(require_teacher_or_above)
+):
+    """获取训练建议"""
+    try:
+        client = InferenceClient()
+        recommendation = await client.get_training_recommendation()
+        return recommendation
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取训练建议失败: {str(e)}"
+        )

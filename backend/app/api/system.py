@@ -16,7 +16,7 @@ class ReloadResponse(BaseModel):
     reloaded: bool
 
 
-router = APIRouter(prefix="/api/system", tags=["系统管理"])
+router = APIRouter(prefix="/system", tags=["系统管理"])
 
 
 @router.post("/reload", response_model=ReloadResponse)

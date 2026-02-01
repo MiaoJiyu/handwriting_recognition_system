@@ -20,6 +20,7 @@ class TrainingJob(Base):
     status = Column(Enum(TrainingJobStatus), nullable=False, default=TrainingJobStatus.PENDING)
     progress = Column(Float, default=0.0)  # 0.0 - 1.0
     model_version_id = Column(Integer, ForeignKey("models.id"), nullable=True)
+    scheduled_task_id = Column(Integer, ForeignKey("scheduled_tasks.id"), nullable=True, comment="定时任务ID")
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
@@ -27,3 +28,5 @@ class TrainingJob(Base):
 
     # Relationships
     model = relationship("Model", back_populates="training_jobs")
+    scheduled_task = relationship("ScheduledTask", back_populates="training_jobs", foreign_keys=[scheduled_task_id])
+    scheduled_task_execution = relationship("ScheduledTaskExecution", back_populates="training_job", uselist=False)

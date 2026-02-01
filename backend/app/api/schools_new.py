@@ -8,7 +8,7 @@ from ..models.school import School
 from ..models.user import User
 from ..utils.dependencies import require_system_admin, require_school_admin_or_above, CurrentUserResponse
 
-router = APIRouter(prefix="/api/schools", tags=["学校管理"])
+router = APIRouter(prefix="/schools", tags=["学校管理"])
 
 
 class SchoolCreate(BaseModel):

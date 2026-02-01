@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { configService } from '../services/config';
 import type { UploadFile } from 'antd';
 import { useAuth } from '../contexts/AuthContext';
+import ImagePreview from '../components/ImagePreview';
 
 const { Option } = Select;
 
@@ -15,6 +16,9 @@ const SampleUpload: React.FC = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imagePreviewTitle, setImagePreviewTitle] = useState('');
 
   // 获取系统配置
   const { data: config } = useQuery({
@@ -157,7 +161,29 @@ const SampleUpload: React.FC = () => {
           {/* 图片预览 */}
           {previewImage && (
             <div style={{ marginTop: 16 }}>
-              <Image src={previewImage} alt="预览" style={{ maxHeight: 400 }} />
+              <div style={{ marginBottom: 8 }}>
+                <Button
+                  type="link"
+                  onClick={() => {
+                    setImagePreviewUrl(previewImage);
+                    setImagePreviewTitle('上传的图片预览');
+                    setImagePreviewVisible(true);
+                  }}
+                  style={{ padding: 0 }}
+                >
+                  点击查看大图
+                </Button>
+              </div>
+              <Image
+                src={previewImage}
+                alt="预览"
+                style={{ maxHeight: 400, cursor: 'pointer' }}
+                onClick={() => {
+                  setImagePreviewUrl(previewImage);
+                  setImagePreviewTitle('上传的图片预览');
+                  setImagePreviewVisible(true);
+                }}
+              />
             </div>
           )}
 
@@ -174,6 +200,17 @@ const SampleUpload: React.FC = () => {
           </div>
         </Form>
       </Card>
+
+      <ImagePreview
+        visible={imagePreviewVisible}
+        imageUrl={imagePreviewUrl}
+        imageTitle={imagePreviewTitle}
+        onClose={() => {
+          setImagePreviewVisible(false);
+          setImagePreviewUrl('');
+          setImagePreviewTitle('');
+        }}
+      />
     </div>
   );
 };

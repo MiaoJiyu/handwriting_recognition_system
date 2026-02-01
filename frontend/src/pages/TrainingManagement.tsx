@@ -3,6 +3,7 @@ import { Table, Button, message, Card, Tag, Tooltip, Space, Modal } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { PlayCircleOutlined, ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { formatDateToLocal } from '../utils/datetime';
 
 const TrainingManagement: React.FC = () => {
   const queryClient = useQueryClient();
@@ -79,7 +80,7 @@ const TrainingManagement: React.FC = () => {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (text: string) => new Date(text).toLocaleString(),
+      render: (text: string) => formatDateToLocal(text) || '-',
     },
     {
       title: '详情',

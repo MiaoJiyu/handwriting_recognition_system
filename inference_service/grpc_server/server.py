@@ -304,6 +304,33 @@ class HandwritingInferenceServicer(handwriting_inference_pb2_grpc.HandwritingInf
                 updated_sample_count=0
             )
 
+    async def GetTrainingRecommendation(self, request, context):
+        """获取训练建议"""
+        try:
+            recommendation = await self.trainer.get_training_recommendation()
+
+            return handwriting_inference_pb2.TrainingRecommendationResponse(
+                should_train=recommendation.get("should_train", False),
+                strategy=recommendation.get("strategy", ""),
+                reason=recommendation.get("reason", ""),
+                change_type=recommendation.get("change_type", ""),
+                change_ratio=recommendation.get("change_ratio", 0.0),
+                priority=recommendation.get("priority", 0)
+            )
+        except Exception as e:
+            logger.error(f"获取训练建议失败: {str(e)}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return handwriting_inference_pb2.TrainingRecommendationResponse(
+                should_train=False,
+                strategy="",
+                reason="",
+                change_type="",
+                change_ratio=0.0,
+                priority=0,
+                error_message=str(e)
+            )
+
 
 async def serve():
     """启动gRPC服务器"""
