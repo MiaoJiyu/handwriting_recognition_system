@@ -12,6 +12,7 @@ import {
   ControlOutlined,
   KeyOutlined,
   ClockCircleOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -55,6 +56,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         key: '/users',
         icon: <UserOutlined />,
         label: '用户管理',
+      },
+      {
+        key: '/quotas',
+        icon: <ThunderboltOutlined />,
+        label: '配额管理',
       },
       {
         key: '/training',

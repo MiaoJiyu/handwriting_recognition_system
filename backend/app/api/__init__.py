@@ -10,6 +10,7 @@ from .token import router as token_router
 from .tokens import router as tokens_router
 from .token_management import router as token_management_router
 from .scheduled_tasks import router as scheduled_tasks_router
+from .quotas import router as quotas_router
 
 __all__ = [
     "auth_router",
@@ -23,5 +24,6 @@ __all__ = [
     "token_router",
     "tokens_router",
     "token_management_router",
-    "scheduled_tasks_router"
+    "scheduled_tasks_router",
+    "quotas_router"
 ]

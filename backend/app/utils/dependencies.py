@@ -71,12 +71,18 @@ def _verify_api_token(token: str, db: Session) -> Optional[User]:
         )
 
     # Check if token has expired
-    if api_token.expires_at and api_token.expires_at < utc_now():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API Token已过期",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if api_token.expires_at:
+        # Ensure both datetimes are timezone-aware
+        expires_at = api_token.expires_at
+        if expires_at.tzinfo is None:
+            from datetime import timezone
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < utc_now():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API Token已过期",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     # Get the user associated with the token
     user = db.query(User).filter(User.id == api_token.user_id).first()
@@ -91,6 +97,7 @@ def _verify_api_token(token: str, db: Session) -> Optional[User]:
     api_token.last_used_at = utc_now()
     api_token.usage_count += 1
     db.commit()
+    db.refresh(api_token)
 
     return user
 
@@ -242,3 +249,134 @@ def require_teacher_or_above(current_user: CurrentUserResponse = Depends(get_cur
             detail="需要教师或以上权限"
         )
     return current_user
+
+
+def get_current_api_token(
+    current_user: CurrentUserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Optional[ApiToken]:
+    """获取当前API Token（仅当使用API Token时）"""
+    if current_user.token_type != 'api_token':
+        return None
+
+    # Try to get the token from the database
+    # We need to find which token belongs to this user
+    # Since we don't have the token value in current_user, we'll check if there's only one active token
+    # In a real implementation, you might want to pass the token value through
+    return None  # Simplified for now
+
+
+async def require_token_permission(permission: str):
+    """检查API Token权限的依赖工厂函数
+
+    Args:
+        permission: 需要的权限名称，如 'manage_system', 'manage_users' 等
+
+    Returns:
+        依赖函数
+
+    使用示例:
+        @router.get("/system/config")
+        async def get_system_config(
+            current_user = Depends(require_token_permission("manage_system"))
+        ):
+            ...
+    """
+    async def permission_checker(
+        current_user: CurrentUserResponse = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ) -> CurrentUserResponse:
+        # 如果是JWT token，使用角色权限检查
+        if current_user.token_type == 'jwt':
+            # 对于系统管理功能，需要system_admin角色
+            if permission == "manage_system" and current_user.role != "system_admin":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="需要系统管理员权限或包含 manage_system 权限的Token"
+                )
+            return current_user
+
+        # 如果是API Token，检查具体权限
+        if current_user.token_type == 'api_token':
+            # 获取用户的API Token
+            api_token = db.query(ApiToken).filter(
+                ApiToken.user_id == current_user.id,
+                ApiToken.is_active == True,
+                ApiToken.is_revoked == False
+            ).first()
+
+            if not api_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="无效的API Token"
+                )
+
+            # 检查权限
+            permission_map = {
+                'read_samples': api_token.can_read_samples,
+                'write_samples': api_token.can_write_samples,
+                'recognize': api_token.can_recognize,
+                'read_users': api_token.can_read_users,
+                'manage_users': api_token.can_manage_users,
+                'manage_schools': api_token.can_manage_schools,
+                'manage_training': api_token.can_manage_training,
+                'manage_system': api_token.can_manage_system
+            }
+
+            if not permission_map.get(permission, False):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"缺少所需权限: {permission}。Token需要包含此权限才能访问此端点。"
+                )
+
+            return current_user
+
+        # 未知的token类型
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的认证方式"
+        )
+
+    return permission_checker
+
+
+def require_manage_system_permission(
+    current_user: CurrentUserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> CurrentUserResponse:
+    """要求系统管理权限（角色或Token权限）"""
+    # JWT Token: 检查角色
+    if current_user.token_type == 'jwt':
+        if current_user.role != "system_admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="需要系统管理员权限或包含 manage_system 权限的Token"
+            )
+        return current_user
+
+    # API Token: 检查权限
+    if current_user.token_type == 'api_token':
+        api_token = db.query(ApiToken).filter(
+            ApiToken.user_id == current_user.id,
+            ApiToken.is_active == True,
+            ApiToken.is_revoked == False
+        ).first()
+
+        if not api_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的API Token"
+            )
+
+        if not api_token.can_manage_system:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="需要系统管理权限。Token需要包含 manage_system 权限才能访问此端点。"
+            )
+
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无效的认证方式"
+    )

@@ -60,6 +60,7 @@ interface Token {
     manage_users: boolean;
     manage_schools: boolean;
     manage_training: boolean;
+    manage_system: boolean;
   };
   is_active: boolean;
   created_at: string;
@@ -157,6 +158,7 @@ const TokenManagement: React.FC = () => {
       if (values.manage_users) permissions.push('manage_users');
       if (values.manage_schools) permissions.push('manage_schools');
       if (values.manage_training) permissions.push('manage_training');
+      if (values.manage_system) permissions.push('manage_system');
 
       // Check if confirmation is needed
       if (showWarning && !confirmedRisk) {
@@ -240,6 +242,7 @@ const TokenManagement: React.FC = () => {
           {record.permissions.manage_users && <Tag color="red">管理用户</Tag>}
           {record.permissions.manage_schools && <Tag color="purple">管理学校</Tag>}
           {record.permissions.manage_training && <Tag color="volcano">训练管理</Tag>}
+          {record.permissions.manage_system && <Tag color="magenta">系统管理</Tag>}
         </Space>
       )
     },
@@ -370,7 +373,8 @@ const TokenManagement: React.FC = () => {
         read_users: true,
         manage_users: false,
         manage_schools: false,
-        manage_training: false
+        manage_training: false,
+        manage_system: false
       };
     } else if (scope === 'write') {
       return {
@@ -380,7 +384,8 @@ const TokenManagement: React.FC = () => {
         read_users: true,
         manage_users: false,
         manage_schools: false,
-        manage_training: false
+        manage_training: false,
+        manage_system: false
       };
     } else if (scope === 'admin') {
       return {
@@ -390,7 +395,8 @@ const TokenManagement: React.FC = () => {
         read_users: true,
         manage_users: true,
         manage_schools: true,
-        manage_training: true
+        manage_training: true,
+        manage_system: true
       };
     }
     return {
@@ -400,7 +406,8 @@ const TokenManagement: React.FC = () => {
       read_users: false,
       manage_users: false,
       manage_schools: false,
-      manage_training: false
+      manage_training: false,
+      manage_system: false
     };
   };
 
@@ -645,6 +652,10 @@ const TokenManagement: React.FC = () => {
 
           <Form.Item name="manage_training" valuePropName="checked">
             <Checkbox>训练管理 - 可以管理模型训练</Checkbox>
+          </Form.Item>
+
+          <Form.Item name="manage_system" valuePropName="checked">
+            <Checkbox>系统管理 - 可以重载系统配置和管理配额限制</Checkbox>
           </Form.Item>
         </Form>
       </Modal>

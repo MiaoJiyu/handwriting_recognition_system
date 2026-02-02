@@ -27,6 +27,7 @@ class ApiToken(Base):
     can_manage_users = Column(Boolean, default=False)
     can_manage_schools = Column(Boolean, default=False)
     can_manage_training = Column(Boolean, default=False)
+    can_manage_system = Column(Boolean, default=False)
 
     # Owner information
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -83,6 +84,7 @@ class ApiToken(Base):
             "can_manage_users": self.can_manage_users,
             "can_manage_schools": self.can_manage_schools,
             "can_manage_training": self.can_manage_training,
+            "can_manage_system": self.can_manage_system,
             "is_active": self.is_active,
             "is_revoked": self.is_revoked,
             "created_at": created_at.isoformat() if created_at else None,

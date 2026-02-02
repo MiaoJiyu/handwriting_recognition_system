@@ -43,7 +43,8 @@ class CreateTokenRequest(BaseModel):
             'read_users': False,
             'manage_users': False,
             'manage_schools': False,
-            'manage_training': False
+            'manage_training': False,
+            'manage_system': False
         }
 
         for perm in self.permissions:
@@ -153,6 +154,7 @@ async def create_api_token(
     - `manage_users`: Can create, modify, and delete users
     - `manage_schools`: Can create, modify, and delete schools
     - `manage_training`: Can trigger and manage training
+    - `manage_system`: Can reload system configuration and manage quotas
 
     **Scopes:**
     - `read`: Includes read_samples, read_users
@@ -253,6 +255,7 @@ async def create_api_token(
         can_manage_users=perms['manage_users'],
         can_manage_schools=perms['manage_schools'],
         can_manage_training=perms['manage_training'],
+        can_manage_system=perms['manage_system'],
         user_id=current_user.id,
         school_id=current_user.school_id,
         is_active=True,
@@ -315,7 +318,8 @@ async def list_api_tokens(
                 'read_users': token.can_read_users,
                 'manage_users': token.can_manage_users,
                 'manage_schools': token.can_manage_schools,
-                'manage_training': token.can_manage_training
+                'manage_training': token.can_manage_training,
+                'manage_system': token.can_manage_system
             },
             is_active=token.is_active and not token.is_revoked,
             created_at=serialize_datetime_utc(token.created_at),
@@ -449,7 +453,8 @@ async def get_api_token(
             'read_users': token.can_read_users,
             'manage_users': token.can_manage_users,
             'manage_schools': token.can_manage_schools,
-            'manage_training': token.can_manage_training
+            'manage_training': token.can_manage_training,
+            'manage_system': token.can_manage_system
         },
         is_active=token.is_active and not token.is_revoked,
         created_at=serialize_datetime_utc(token.created_at),

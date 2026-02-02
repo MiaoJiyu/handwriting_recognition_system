@@ -12,6 +12,7 @@ from .scheduled_task import (
     ScheduleTriggerType
 )
 from .api_token import ApiToken
+from .quota import Quota, QuotaUsageLog
 
 __all__ = [
     "User",
@@ -30,4 +31,6 @@ __all__ = [
     "ScheduleStatus",
     "ScheduleTriggerType",
     "ApiToken",
+    "Quota",
+    "QuotaUsageLog",
 ]

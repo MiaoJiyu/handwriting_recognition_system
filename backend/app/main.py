@@ -17,7 +17,8 @@ from .api import (
     token_router,
     tokens_router,
     token_management_router,
-    scheduled_tasks_router
+    scheduled_tasks_router,
+    quotas_router
 )
 from .services.task_scheduler import task_scheduler
 
@@ -125,6 +126,7 @@ app.include_router(token_router, prefix="/api")
 app.include_router(tokens_router, prefix="/api")
 app.include_router(token_management_router, prefix="/api")
 app.include_router(scheduled_tasks_router, prefix="/api")
+app.include_router(quotas_router, prefix="/api")
 
 
 @app.get("/")

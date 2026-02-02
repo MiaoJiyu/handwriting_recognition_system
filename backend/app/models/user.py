@@ -35,3 +35,5 @@ class User(Base):
     user_features = relationship("UserFeature", back_populates="user", cascade="all, delete-orphan")
     api_tokens = relationship("ApiToken", back_populates="user", cascade="all, delete-orphan")
     scheduled_tasks = relationship("ScheduledTask", back_populates="creator", cascade="all, delete-orphan")
+    quota = relationship("Quota", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    quota_usage_logs = relationship("QuotaUsageLog", back_populates="user", cascade="all, delete-orphan")

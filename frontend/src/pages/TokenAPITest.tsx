@@ -65,10 +65,10 @@ const TokenAPITest: React.FC = () => {
     { label: '获取 API 配置', value: 'GET /v1/tokens/config' },
     { label: '获取 API 信息', value: 'GET /v1/tokens/info' },
     { label: '验证 Token', value: 'POST /v1/tokens/verify' },
-    
+
     // Token 管理器 API
     { label: '列出 Token', value: 'GET /tokens/list' },
-    
+
     // 用户管理 API
     { label: '列出用户', value: 'GET /v1/users' },
     { label: '获取用户详情', value: 'GET /v1/users/1' },
@@ -76,14 +76,20 @@ const TokenAPITest: React.FC = () => {
     { label: '更新用户', value: 'PUT /v1/users/1' },
     { label: '设置密码', value: 'POST /v1/users/1/password' },
     { label: '删除用户', value: 'DELETE /v1/users/1' },
-    
+
     // 学校管理 API
     { label: '列出学校', value: 'GET /v1/schools' },
     { label: '获取学校详情', value: 'GET /v1/schools/1' },
     { label: '创建学校', value: 'POST /v1/schools' },
     { label: '更新学校', value: 'PUT /v1/schools/1' },
     { label: '删除学校', value: 'DELETE /v1/schools/1' },
-    
+
+    // 配额管理 API (Token API)
+    { label: '查询用户配额', value: 'POST /v1/tokens/quota/query' },
+    { label: '设置用户配额', value: 'POST /v1/tokens/quota/set' },
+    { label: '批量设置用户配额', value: 'POST /v1/tokens/quota/batch-set' },
+    { label: '重置配额使用计数', value: 'POST /v1/tokens/quota/reset' },
+
     // 其他 API
     { label: '列出样本', value: 'GET /samples' },
     { label: '字迹识别', value: 'POST /recognition' },
@@ -236,6 +242,48 @@ const TokenAPITest: React.FC = () => {
           name: "测试学校（更新）"
         }, null, 2)
       });
+    } else if (path.includes('/quota/query')) {
+      // Query quota endpoint
+      form.setFieldsValue({
+        requestBody: JSON.stringify({
+          user_id: null
+        }, null, 2)
+      });
+    } else if (path.includes('/quota/set')) {
+      // Set quota endpoint
+      form.setFieldsValue({
+        requestBody: JSON.stringify({
+          quota_type: "user",
+          user_id: 1,
+          minute_limit: 10,
+          hour_limit: 100,
+          day_limit: 1000,
+          month_limit: 10000,
+          total_limit: 0,
+          description: "用户配额测试"
+        }, null, 2)
+      });
+    } else if (path.includes('/quota/batch-set')) {
+      // Batch set quota endpoint
+      form.setFieldsValue({
+        requestBody: JSON.stringify({
+          user_ids: [1, 2, 3],
+          minute_limit: 5,
+          hour_limit: 50,
+          day_limit: 500,
+          month_limit: 5000,
+          total_limit: 0,
+          description: "批量用户配额测试"
+        }, null, 2)
+      });
+    } else if (path.includes('/quota/reset')) {
+      // Reset quota endpoint
+      form.setFieldsValue({
+        requestBody: JSON.stringify({
+          quota_id: 1,
+          reset_type: "all"
+        }, null, 2)
+      });
     } else {
       form.setFieldsValue({ requestBody: '' });
     }
@@ -247,7 +295,7 @@ const TokenAPITest: React.FC = () => {
         <PlayCircleOutlined /> Token API 快速测试
       </Title>
       <Paragraph type="secondary">
-        快速测试 Token API 的各项功能，验证 Token 是否正常工作。
+        快速测试 Token API 的各项功能，包括配额管理、用户管理、学校管理等。支持通过 Token API 修改配额次数限制。
       </Paragraph>
 
       <Row gutter={24}>
@@ -485,7 +533,56 @@ const TokenAPITest: React.FC = () => {
             </Space>
           </Panel>
 
-          <Panel header="错误处理" key="6">
+          <Panel header="配额管理 API (Token API)" key="6">
+            <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Text strong>查询用户配额 (POST /v1/tokens/quota/query)</Text>
+              <Text>• 权限：所有登录用户</Text>
+              <Text>• 学生/教师：只能查询自己的配额</Text>
+              <Text>• 学校管理员：可以查询本校用户配额</Text>
+              <Text>• 系统管理员：可以查询任意用户配额</Text>
+              <Text>• 返回配额限制、已使用次数和剩余次数</Text>
+              <Divider style={{ margin: '8px 0' }} />
+              <Text strong>设置用户配额 (POST /v1/tokens/quota/set)</Text>
+              <Text>• 需要权限：school_admin 或 system_admin</Text>
+              <Text>• 学校管理员：只能设置本校用户配额</Text>
+              <Text>• 系统管理员：可以设置任意用户配额</Text>
+              <Text>• quota_type: "user" 或 "school"</Text>
+              <Divider style={{ margin: '8px 0' }} />
+              <Text strong>批量设置配额 (POST /v1/tokens/quota/batch-set)</Text>
+              <Text>• 需要权限：school_admin 或 system_admin</Text>
+              <Text>• 支持同时设置多个用户或学校的配额</Text>
+              <Text>• 所有配额参数将应用到选中的所有用户/学校</Text>
+              <Divider style={{ margin: '8px 0' }} />
+              <Text strong>重置配额 (POST /v1/tokens/quota/reset)</Text>
+              <Text>• 需要权限：school_admin 或 system_admin</Text>
+              <Text>• reset_type 可选值："minute", "hour", "day", "month", "total", "all"</Text>
+              <Text>• 学校管理员：只能重置本校配额</Text>
+              <Text>• 系统管理员：可以重置任意配额</Text>
+              <Divider style={{ margin: '8px 0' }} />
+              <Alert
+                message="配额限制说明"
+                description={
+                  <div>
+                    <Text>• 所有限制值为 0 表示无限制</Text>
+                    <br />
+                    <Text>• minute_limit: 每分钟请求次数限制</Text>
+                    <br />
+                    <Text>• hour_limit: 每小时请求次数限制</Text>
+                    <br />
+                    <Text>• day_limit: 每天请求次数限制</Text>
+                    <br />
+                    <Text>• month_limit: 每月请求次数限制</Text>
+                    <br />
+                    <Text>• total_limit: 总请求次数限制</Text>
+                  </div>
+                }
+                type="info"
+                showIcon
+              />
+            </Space>
+          </Panel>
+
+          <Panel header="错误处理" key="7">
             <Space direction="vertical" style={{ width: '100%' }} size="small">
               <Text strong>常见错误代码：</Text>
               <Text>• 401 Unauthorized - Token 无效或已过期</Text>
@@ -493,6 +590,7 @@ const TokenAPITest: React.FC = () => {
               <Text>• 404 Not Found - 请求的资源不存在</Text>
               <Text>• 400 Bad Request - 用户名已存在、角色无效、尝试删除自己</Text>
               <Text>• 413 Payload Too Large - 文件过大</Text>
+              <Text>• 429 Too Many Requests - 配额限制已触发</Text>
             </Space>
           </Panel>
         </Collapse>

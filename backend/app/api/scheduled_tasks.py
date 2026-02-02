@@ -474,7 +474,7 @@ async def list_task_executions(
         ScheduledTaskExecution.scheduled_task_id == task_id
     ).order_by(ScheduledTaskExecution.started_at.desc()).offset(skip).limit(limit).all()
 
-    return [_execution_to_response(exec) for exec in executions]
+    return [_execution_to_response(execution) for execution in executions]
 
 
 def _task_to_response(task: ScheduledTask, db: Session) -> ScheduledTaskResponse:

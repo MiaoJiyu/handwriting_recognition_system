@@ -8,8 +8,10 @@ import shutil
 from ..core.database import get_db
 from ..core.config import settings
 from ..models.recognition_log import RecognitionLog
+from ..models.user import UserRole
 from ..utils.dependencies import require_teacher_or_above, get_current_user, CurrentUserResponse
 from ..services.inference_client import InferenceClient
+from ..services.quota_service import QuotaService
 
 router = APIRouter(prefix="/recognition", tags=["识别"])
 
@@ -54,30 +56,48 @@ async def recognize(
     # 重置文件指针到开头
     await file.seek(0)
 
+    # 检查配额
+    is_allowed, deny_reason, usage_snapshot = QuotaService.check_quota(
+        db=db,
+        user_id=current_user.id,
+        user_role=current_user.role,
+        school_id=current_user.school_id
+    )
+
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "detail": "识别次数超限",
+                "deny_reason": deny_reason,
+                "usage": usage_snapshot
+            }
+        )
+
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(settings.UPLOAD_DIR, f"temp_{timestamp}_{file.filename}")
-    
+
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     try:
         client = InferenceClient()
         # 调用推理服务
         try:
             recognition_result = await client.recognize(temp_path)
-            
+
             # 构建结果
             top_k = recognition_result.get("top_k", [])
             is_unknown = recognition_result.get("is_unknown", True)
             confidence = recognition_result.get("confidence", 0.0)
-            
+
             user_id = None
             username = None
             if top_k and not is_unknown:
                 user_id = top_k[0].get("user_id")
                 username = top_k[0].get("username")
-            
+
             result = RecognitionResult(
                 user_id=user_id,
                 username=username,
@@ -94,7 +114,7 @@ async def recognize(
                 is_unknown=True,
                 top_k=[]
             )
-        
+
         # 保存识别日志
         import json
         log = RecognitionLog(
@@ -107,7 +127,24 @@ async def recognize(
         db.add(log)
         db.commit()
         db.refresh(log)
-        
+
+        # 增加配额使用次数
+        user_quota = QuotaService.get_or_create_user_quota(db, current_user.id, current_user.school_id)
+        school_quota = None
+        if current_user.school_id:
+            school_quota = QuotaService.get_or_create_school_quota(db, current_user.school_id)
+
+        QuotaService.increment_quota_usage(
+            db=db,
+            user_id=current_user.id,
+            school_id=current_user.school_id,
+            recognition_log_id=log.id,
+            user_quota=user_quota,
+            school_quota=school_quota,
+            is_allowed=True,
+            deny_reason=None
+        )
+
         return RecognitionResponse(
             result=result,
             sample_id=None,

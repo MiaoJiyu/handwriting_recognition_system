@@ -17,6 +17,7 @@ import TokenManagement from './pages/TokenManagement';
 import TokenAPITest from './pages/TokenAPITest';
 import UserCenter from './pages/UserCenter';
 import ScheduledTasks from './pages/ScheduledTasks';
+import QuotaManagement from './pages/QuotaManagement';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -62,6 +63,7 @@ const App: React.FC = () => {
                         <Route path="/tokens" element={<TokenManagement />} />
                         <Route path="/api-test" element={<TokenAPITest />} />
                         <Route path="/user-center" element={<UserCenter />} />
+                        <Route path="/quotas" element={<QuotaManagement />} />
                       </Routes>
                     </Layout>
                   </ProtectedRoute>

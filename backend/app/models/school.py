@@ -14,3 +14,4 @@ class School(Base):
     # Relationships
     users = relationship("User", back_populates="school")
     scheduled_tasks = relationship("ScheduledTask", back_populates="school", cascade="all, delete-orphan")
+    quota = relationship("Quota", back_populates="school", uselist=False, cascade="all, delete-orphan")
