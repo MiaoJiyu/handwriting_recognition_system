@@ -16,7 +16,7 @@ grpcio-tools>=1.59.3
 apscheduler>=3.10.4
 croniter>=2.0.1
 pillow>=10.2.0
-opencv-python>=4.8.1.78
+opencv-python<=4.6.0.66
 # PaddleOCR版本限制 - 使用2.6.x系列以匹配兼容性
 paddlepaddle==2.6.2
 paddleocr==2.7.3
