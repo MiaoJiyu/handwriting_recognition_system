@@ -8,7 +8,7 @@ export default defineConfig({
     allowedHosts: ['5173.app.cloudstudio.work'],
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://47.117.126.60:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
     },
