@@ -40,7 +40,29 @@ const Recognition: React.FC = () => {
       setResult(data);
     },
     onError: (error: any) => {
-      message.error(error.response?.data?.detail || '识别失败');
+      const errorData = error.response?.data;
+      if (errorData) {
+        // Handle quota limit exceeded error
+        if (error.response?.status === 429 && errorData.detail) {
+          let errorMessage = '';
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.detail.detail) {
+            errorMessage = errorData.detail.detail;
+          }
+          
+          // Add deny reason if available
+          if (errorData.detail?.deny_reason) {
+            errorMessage += ` (${errorData.detail.deny_reason})`;
+          }
+          
+          message.error(errorMessage || '识别次数超限');
+        } else {
+          message.error(errorData.detail || errorData.message || '识别失败');
+        }
+      } else {
+        message.error('识别失败，请稍后重试');
+      }
     },
   });
 
@@ -106,11 +128,6 @@ const Recognition: React.FC = () => {
       render: (score: number) => `${(score * 100).toFixed(2)}%`,
     },
   ];
-
-  // 点击用户名展示该用户的历史图片
-  const handleUsernameClick = (userId: number, username: string) => {
-    window.open(`/sample-list?user_id=${userId}&username=${username}`, '_blank');
-  };
 
   return (
     <div>

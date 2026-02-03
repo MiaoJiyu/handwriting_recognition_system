@@ -7,7 +7,6 @@ import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 import { formatDateToLocalZh } from '../utils/datetime';
 
-const { TabPane } = Tabs;
 
 interface Student {
   id: number;
@@ -1051,233 +1050,232 @@ const UserManagement: React.FC = () => {
           ),
         ]}
       >
-        <Tabs activeKey={modalType === 'edit' || modalType === 'password' ? 'create' : modalType} onChange={(key) => {
-          if (key !== 'edit' && key !== 'password') {
-            setModalType(key as any);
-          }
-        }}>
-          <TabPane tabKey="create" key="create">
-            <Form
-              form={form}
-              layout="vertical"
-              onFinish={handleSubmit}
-            >
-              {modalType === 'password' ? (
-                <>
-                  <Form.Item name="password" label="新密码" rules={[{ required: true, min: 6 }]}>
-                    <Input.Password placeholder="请输入新密码（至少6位）" />
-                  </Form.Item>
-                  <Form.Item name="confirmPassword" label="确认密码" rules={[
-                    { required: true },
-                    ({ getFieldValue }) => ({
-                      validator: (_, value) => {
-                        if (value && value !== getFieldValue('password')) {
-                          return Promise.reject('两次输入的密码不一致');
-                        }
-                        return Promise.resolve();
-                      },
-                    }),
-                  ]}>
-                    <Input.Password placeholder="请再次输入新密码" />
-                  </Form.Item>
-                </>
-              ) : (
-                <>
-                  <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-                    <Input disabled={modalType === 'edit'} />
-                  </Form.Item>
-                  <Form.Item name="password" label="密码" rules={modalType === 'edit' ? [] : [{ required: true }]}>
-                    <Input.Password placeholder={modalType === 'edit' ? '留空则不修改密码' : ''} />
-                  </Form.Item>
-                  <Form.Item name="nickname" label="昵称（学生姓名）">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="role" label="角色" rules={[{ required: true }]}>
-                    <Select disabled={modalType === 'edit'}>
-                      <Select.Option value="student">学生</Select.Option>
-                      <Select.Option value="teacher">教师</Select.Option>
-                      {user?.role === 'system_admin' && (
-                        <Select.Option value="school_admin">学校管理员</Select.Option>
-                      )}
-                    </Select>
-                  </Form.Item>
-                  {user?.role === 'system_admin' && schools && (
-                    <Form.Item name="school_id" label="学校">
-                      <Select placeholder="选择学校">
-                        {schools.map((school: School) => (
-                          <Select.Option key={school.id} value={school.id}>
-                            {school.name}
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  )}
-                </>
-              )}
-            </Form>
-          </TabPane>
-
-          <TabPane tabKey="batch" key="batch">
-            <Form form={batchForm} layout="vertical" initialValues={{ students: [{ username: '', nickname: '', password: '', school_id: user?.school_id }], auto_generate_username: false, auto_generate_password: false }}>
-              <Alert
-                message="批量创建说明"
-                description="可以手动输入学生信息，也可以自动生成学号和密码。系统管理员可以为不同学校创建学生。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-              {user?.role === 'system_admin' && (
+        {modalType === 'batch' || modalType === 'import' ? (
+          <Form
+            form={batchForm}
+            layout="vertical"
+            initialValues={{ students: [{ username: '', nickname: '', password: '', school_id: user?.school_id }], auto_generate_username: false, auto_generate_password: false }}
+          >
+            {modalType === 'batch' && (
+              <>
                 <Alert
-                  message="学校选择说明"
-                  description="如果不选择学校，将根据批量创建按钮的上下文确定学校。建议明确选择学校以避免混淆。"
-                  type="warning"
+                  message="批量创建说明"
+                  description="可以手动输入学生信息，也可以自动生成学号和密码。系统管理员可以为不同学校创建学生。"
+                  type="info"
                   showIcon
                   style={{ marginBottom: 16 }}
                 />
-              )}
-              {user?.role === 'system_admin' && schools && (
-                <Form.Item name="batch_school_id" label="学校（可选）">
-                  <Select
-                    placeholder="请选择学校（留空则默认为所选学校）"
-                    allowClear
-                    onChange={(value) => {
-                      // 更新表单中所有学生的 school_id
-                      const currentStudents = batchForm.getFieldValue('students') || [];
-                      batchForm.setFieldValue('students', currentStudents.map((s: BatchStudentData) => ({
-                        ...s,
-                        school_id: value || user.school_id
-                      })));
-                    }}
-                  >
-                    {schools.map((school: School) => (
-                      <Select.Option key={school.id} value={school.id}>
-                        {school.name}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                {user?.role === 'system_admin' && (
+                  <Alert
+                    message="学校选择说明"
+                    description="如果不选择学校，将根据批量创建按钮的上下文确定学校。建议明确选择学校以避免混淆。"
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )}
+                {user?.role === 'system_admin' && schools && (
+                  <Form.Item name="batch_school_id" label="学校（可选）">
+                    <Select
+                      placeholder="请选择学校（留空则默认为所选学校）"
+                      allowClear
+                      onChange={(value) => {
+                        // 更新表单中所有学生的 school_id
+                        const currentStudents = batchForm.getFieldValue('students') || [];
+                        batchForm.setFieldValue('students', currentStudents.map((s: BatchStudentData) => ({
+                          ...s,
+                          school_id: value || user.school_id
+                        })));
+                      }}
+                    >
+                      {schools.map((school: School) => (
+                        <Select.Option key={school.id} value={school.id}>
+                          {school.name}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                )}
+                <Form.Item name="auto_generate_username" valuePropName="checked">
+                  <span>自动生成学号（格式：2024XXXX）</span>
                 </Form.Item>
-              )}
-              <Form.Item name="auto_generate_username" valuePropName="checked">
-                <span>自动生成学号（格式：2024XXXX）</span>
-              </Form.Item>
-              <Form.Item name="auto_generate_password" valuePropName="checked">
-                <span>自动生成密码（8位，包含字母和数字）</span>
-              </Form.Item>
-              <Form.List name="students">
-                {(fields, { add, remove }) => (
-                  <>
-                    {fields.map((field) => (
-                      <Space key={field.key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                        <Form.Item
-                          name={[field.name, 'username']}
-                          rules={[{ required: true }]}
-                          style={{ marginBottom: 0, width: 130 }}
-                        >
-                          <Input placeholder="学号（或留空自动生成）" />
-                        </Form.Item>
-                        <Form.Item
-                          name={[field.name, 'nickname']}
-                          rules={[{ required: true }]}
-                          style={{ marginBottom: 0, width: 130 }}
-                        >
-                          <Input placeholder="姓名" />
-                        </Form.Item>
-                        <Form.Item
-                          name={[field.name, 'password']}
-                          style={{ marginBottom: 0, width: 130 }}
-                        >
-                          <Input.Password placeholder="密码（或留空自动生成）" />
-                        </Form.Item>
-                        {user?.role === 'system_admin' && (
+                <Form.Item name="auto_generate_password" valuePropName="checked">
+                  <span>自动生成密码（8位，包含字母和数字）</span>
+                </Form.Item>
+                <Form.List name="students">
+                  {(fields, { add, remove }) => (
+                    <>
+                      {fields.map((field) => (
+                        <Space key={field.key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
                           <Form.Item
-                            name={[field.name, 'school_id']}
+                            name={[field.name, 'username']}
+                            rules={[{ required: true }]}
                             style={{ marginBottom: 0, width: 130 }}
                           >
-                            <Select
-                              placeholder="学校（可选）"
-                              allowClear
-                            >
-                              {schools?.map((school: School) => (
-                                <Select.Option key={school.id} value={school.id}>
-                                  {school.name}
-                                </Select.Option>
-                              ))}
-                            </Select>
+                            <Input placeholder="学号（或留空自动生成）" />
                           </Form.Item>
-                        )}
-                        <Button type="link" danger onClick={() => remove(field.name)}>
-                          删除
-                        </Button>
-                      </Space>
-                    ))}
-                    <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />}>
-                      添加学生
-                    </Button>
-                  </>
+                          <Form.Item
+                            name={[field.name, 'nickname']}
+                            rules={[{ required: true }]}
+                            style={{ marginBottom: 0, width: 130 }}
+                          >
+                            <Input placeholder="姓名" />
+                          </Form.Item>
+                          <Form.Item
+                            name={[field.name, 'password']}
+                            style={{ marginBottom: 0, width: 130 }}
+                          >
+                            <Input.Password placeholder="密码（或留空自动生成）" autoComplete="new-password" />
+                          </Form.Item>
+                          {user?.role === 'system_admin' && (
+                            <Form.Item
+                              name={[field.name, 'school_id']}
+                              style={{ marginBottom: 0, width: 130 }}
+                            >
+                              <Select
+                                placeholder="学校（可选）"
+                                allowClear
+                              >
+                                {schools?.map((school: School) => (
+                                  <Select.Option key={school.id} value={school.id}>
+                                    {school.name}
+                                  </Select.Option>
+                                ))}
+                              </Select>
+                            </Form.Item>
+                          )}
+                          <Button type="link" danger onClick={() => remove(field.name)}>
+                            删除
+                          </Button>
+                        </Space>
+                      ))}
+                      <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />}>
+                        添加学生
+                      </Button>
+                    </>
+                  )}
+                </Form.List>
+              </>
+            )}
+            {modalType === 'import' && (
+              <>
+                <Alert
+                  message="导入说明"
+                  description={
+                    <ul style={{ margin: 0, paddingLeft: 20 }}>
+                      <li>请上传Excel文件，文件应包含以下列：学号、姓名（昵称）、密码。</li>
+                      <li>如果不包含密码，将使用自动生成的密码。</li>
+                      {user?.role === 'system_admin' && (
+                        <li>可以添加"学校"列来指定学生所属学校（可选）。</li>
+                      )}
+                      {user?.role === 'school_admin' && (
+                        <li>如果不指定学校，将默认为您所在的学校。</li>
+                      )}
+                    </ul>
+                  }
+                  type="info"
+                  showIcon
+                />
+                {user?.role === 'system_admin' && schools && (
+                  <Form.Item label="默认学校（可选）">
+                    <Select
+                      placeholder="选择默认学校（可选）"
+                      allowClear
+                      onChange={(value) => {
+                        batchForm.setFieldValue('batch_school_id', value);
+                      }}
+                    >
+                      {schools.map((school: School) => (
+                        <Select.Option key={school.id} value={school.id}>
+                          {school.name}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
                 )}
-              </Form.List>
-            </Form>
-          </TabPane>
-
-          <TabPane tabKey="import" key="import">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              <Alert
-                message="导入说明"
-                description={
-                  <ul style={{ margin: 0, paddingLeft: 20 }}>
-                    <li>请上传Excel文件，文件应包含以下列：学号、姓名（昵称）、密码。</li>
-                    <li>如果不包含密码，将使用自动生成的密码。</li>
+                <Upload.Dragger
+                  accept=".xlsx,.xls"
+                  maxCount={1}
+                  fileList={fileList}
+                  beforeUpload={(file) => {
+                    const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                                    file.type === 'application/vnd.ms-excel';
+                    if (!isExcel) {
+                      message.error('只能上传Excel文件');
+                      return Upload.LIST_IGNORE;
+                    }
+                    return false;
+                  }}
+                  onChange={({ fileList }) => setFileList(fileList)}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <UploadOutlined />
+                    <p>点击或拖拽Excel文件到此处上传</p>
+                  </p>
+                </Upload.Dragger>
+              </>
+            )}
+          </Form>
+        ) : (
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+          >
+            {modalType === 'password' ? (
+              <>
+                <Form.Item name="password" label="新密码" rules={[{ required: true, min: 6 }]}>
+                  <Input.Password placeholder="请输入新密码（至少6位）" autoComplete="new-password" />
+                </Form.Item>
+                <Form.Item name="confirmPassword" label="确认密码" rules={[
+                  { required: true },
+                  ({ getFieldValue }) => ({
+                    validator: (_, value) => {
+                      if (value && value !== getFieldValue('password')) {
+                        return Promise.reject('两次输入的密码不一致');
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}>
+                  <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
+                </Form.Item>
+              </>
+            ) : (
+              <>
+                <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+                  <Input disabled={modalType === 'edit'} />
+                </Form.Item>
+                <Form.Item name="password" label="密码" rules={modalType === 'edit' ? [] : [{ required: true }]}>
+                  <Input.Password placeholder={modalType === 'edit' ? '留空则不修改密码' : ''} autoComplete="new-password" />
+                </Form.Item>
+                <Form.Item name="nickname" label="昵称（学生姓名）">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="role" label="角色" rules={[{ required: true }]}>
+                  <Select disabled={modalType === 'edit'}>
+                    <Select.Option value="student">学生</Select.Option>
+                    <Select.Option value="teacher">教师</Select.Option>
                     {user?.role === 'system_admin' && (
-                      <li>可以添加"学校"列来指定学生所属学校（可选）。</li>
+                      <Select.Option value="school_admin">学校管理员</Select.Option>
                     )}
-                    {user?.role === 'school_admin' && (
-                      <li>如果不指定学校，将默认为您所在的学校。</li>
-                    )}
-                  </ul>
-                }
-                type="info"
-                showIcon
-              />
-              {user?.role === 'system_admin' && schools && (
-                <Form.Item label="默认学校（可选）">
-                  <Select
-                    placeholder="选择默认学校（可选）"
-                    allowClear
-                    onChange={(value) => {
-                      batchForm.setFieldValue('batch_school_id', value);
-                    }}
-                  >
-                    {schools.map((school: School) => (
-                      <Select.Option key={school.id} value={school.id}>
-                        {school.name}
-                      </Select.Option>
-                    ))}
                   </Select>
                 </Form.Item>
-              )}
-              <Upload.Dragger
-                accept=".xlsx,.xls"
-                maxCount={1}
-                fileList={fileList}
-                beforeUpload={(file) => {
-                  const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-                                file.type === 'application/vnd.ms-excel';
-                  if (!isExcel) {
-                    message.error('只能上传Excel文件');
-                    return Upload.LIST_IGNORE;
-                  }
-                  return false;
-                }}
-                onChange={({ fileList }) => setFileList(fileList)}
-              >
-                <p className="ant-upload-drag-icon">
-                  <UploadOutlined />
-                  <p>点击或拖拽Excel文件到此处上传</p>
-                </p>
-              </Upload.Dragger>
-            </Space>
-          </TabPane>
-        </Tabs>
+                {user?.role === 'system_admin' && schools && (
+                  <Form.Item name="school_id" label="学校">
+                    <Select placeholder="选择学校">
+                      {schools.map((school: School) => (
+                        <Select.Option key={school.id} value={school.id}>
+                          {school.name}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                )}
+              </>
+            )}
+          </Form>
+        )}
       </Modal>
 
       {/* 导出筛选弹窗 */}
@@ -1564,7 +1562,7 @@ const UserManagement: React.FC = () => {
                     { min: 6, message: '密码长度不能少于6位' },
                   ]}
                 >
-                  <Input.Password placeholder="请输入新密码（至少6位）" />
+                  <Input.Password placeholder="请输入新密码（至少6位）" autoComplete="new-password" />
                 </Form.Item>
               ) : null
             }

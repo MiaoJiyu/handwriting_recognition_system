@@ -10,6 +10,7 @@ from ..core.config import settings
 from ..models.recognition_log import RecognitionLog
 from ..models.user import UserRole
 from ..utils.dependencies import require_teacher_or_above, get_current_user, CurrentUserResponse
+from ..utils.validators import validate_upload_file
 from ..services.inference_client import InferenceClient
 from ..services.quota_service import QuotaService
 
@@ -37,24 +38,8 @@ async def recognize(
     current_user: CurrentUserResponse = Depends(require_teacher_or_above)
 ):
     """识别单张图片"""
-    # 验证文件类型
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只能上传图片文件"
-        )
-
-    # 验证文件大小
-    file_size = 0
-    for chunk in file.file:
-        file_size += len(chunk)
-        if file_size > settings.MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB"
-            )
-    # 重置文件指针到开头
-    await file.seek(0)
+    # 验证文件类型和大小
+    await validate_upload_file(file, settings.MAX_UPLOAD_SIZE)
 
     # 检查配额
     is_allowed, deny_reason, usage_snapshot = QuotaService.check_quota(

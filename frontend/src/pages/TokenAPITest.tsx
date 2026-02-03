@@ -38,13 +38,6 @@ const apiTest = axios.create({
   },
 });
 
-interface APIRequest {
-  endpoint: string;
-  method: string;
-  headers: Record<string, string>;
-  body?: any;
-}
-
 interface APIResponse {
   status: number;
   statusText: string;
@@ -148,10 +141,10 @@ const TokenAPITest: React.FC = () => {
       const duration = Math.round(endTime - startTime);
 
       setResponse({
-        status: res.status,
+        status: res?.status || 0,
         statusText: 'OK',
-        data: res.data,
-        headers: res.headers as any,
+        data: res?.data,
+        headers: res?.headers as any,
         duration
       });
 

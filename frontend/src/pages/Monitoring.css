@@ -1,0 +1,133 @@
+.monitoring-dashboard {
+  padding: 24px;
+
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+
+    h2 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+  }
+
+  .ant-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    .ant-card-head {
+      border-bottom: 1px solid #f0f0f0;
+      font-weight: 600;
+    }
+  }
+
+  .ant-statistic {
+    .ant-statistic-title {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .ant-statistic-content {
+      font-size: 24px;
+      font-weight: 600;
+    }
+  }
+
+  .ant-table-wrapper {
+    .ant-table {
+      font-size: 13px;
+
+      .ant-table-tbody > tr {
+        &:hover > td {
+          background-color: #f5f5f5;
+        }
+      }
+    }
+  }
+
+  .ant-alert {
+    border-radius: 6px;
+  }
+
+  input[type="text"] {
+    height: 32px;
+    padding: 4px 11px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    outline: none;
+
+    &:hover {
+      border-color: #40a9ff;
+    }
+
+    &:focus {
+      border-color: #40a9ff;
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    }
+  }
+
+  .ant-spin-container {
+    position: relative;
+  }
+
+  .ant-spin-blur {
+    opacity: 0.5;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .ant-spin-dot-item {
+    background-color: #1890ff;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .monitoring-dashboard {
+    .ant-row {
+      flex-direction: column;
+    }
+
+    .ant-col {
+      width: 100% !important;
+      margin-bottom: 16px;
+    }
+  }
+}
+
+/* 日志级别标签样式 */
+.ant-tag {
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+
+  &.ant-tag-blue {
+    background-color: #e6f7ff;
+    border-color: #91d5ff;
+    color: #1890ff;
+  }
+
+  &.ant-tag-green {
+    background-color: #f6ffed;
+    border-color: #b7eb8f;
+    color: #52c41a;
+  }
+
+  &.ant-tag-orange {
+    background-color: #fff7e6;
+    border-color: #ffd591;
+    color: #fa8c16;
+  }
+
+  &.ant-tag-red {
+    background-color: #fff1f0;
+    border-color: #ffa39e;
+    color: #f5222d;
+  }
+}

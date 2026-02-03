@@ -43,14 +43,13 @@ class UserResponse(BaseModel):
     is_switched: bool = False  # 是否为切换后的用户
     original_user_id: Optional[int] = None  # 原始管理员用户ID
 
+    @field_serializer('created_at', mode='wrap')
+    def serialize_datetime(self, value: Optional[datetime], _info):
+        """序列化datetime字段为ISO格式字符串"""
+        return value.isoformat() if value else None
+
     class Config:
         from_attributes = True
-
-    @field_serializer('created_at')
-    def serialize_created_at(self, dt: Optional[datetime], _info):
-        if dt is None:
-            return None
-        return dt.isoformat()
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -251,12 +250,6 @@ async def switch_user(
     db.refresh(current_user)
     db.refresh(target_user)
 
-    # TODO: Add audit logging after creating audit_logs table migration
-    # from ..models.audit_log import AuditLog
-    # audit_log = AuditLog(...)
-    # db.add(audit_log)
-    # db.commit()
-
     # 返回目标用户信息
     # 注意：target_user.created_at 是 datetime 对象，UserResponse 期望 datetime
     return UserResponse(
@@ -303,12 +296,6 @@ async def cancel_switch(
     admin_user.switched_at = None
     db.commit()
     db.refresh(admin_user)
-
-    # TODO: Add audit logging after creating audit_logs table migration
-    # from ..models.audit_log import AuditLog
-    # audit_log = AuditLog(...)
-    # db.add(audit_log)
-    # db.commit()
 
     # 返回管理员用户信息
     return UserResponse(

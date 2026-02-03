@@ -37,7 +37,6 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   const [resizeHandle, setResizeHandle] = useState<string>('');
   const [cropArea, setCropArea] = useState<CropArea>({ x: 50, y: 50, width: 200, height: 150 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
 
   // 加载图片
   useEffect(() => {

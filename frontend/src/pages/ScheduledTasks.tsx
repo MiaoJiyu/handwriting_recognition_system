@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Table,
   Button,
@@ -19,7 +19,6 @@ import {
   Statistic,
   message,
   Timeline,
-  Tabs,
 } from 'antd';
 import {
   PlusOutlined,
@@ -37,7 +36,6 @@ import { api } from '../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
-const { RangePicker } = DatePicker;
 
 interface ScheduledTask {
   id: number;

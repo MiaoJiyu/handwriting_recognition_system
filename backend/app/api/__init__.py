@@ -6,11 +6,10 @@ from .schools import router as schools_router
 from .samples import router as samples_router
 from .config import router as config_router
 from .system import router as system_router
-from .token import router as token_router
-from .tokens import router as tokens_router
-from .token_management import router as token_management_router
+from .token import router as token_router, token_management_router as tokens_management_router
 from .scheduled_tasks import router as scheduled_tasks_router
 from .quotas import router as quotas_router
+from .monitoring import router as monitoring_router
 
 __all__ = [
     "auth_router",
@@ -22,8 +21,8 @@ __all__ = [
     "config_router",
     "system_router",
     "token_router",
-    "tokens_router",
-    "token_management_router",
+    "tokens_management_router",
     "scheduled_tasks_router",
-    "quotas_router"
+    "quotas_router",
+    "monitoring_router"
 ]

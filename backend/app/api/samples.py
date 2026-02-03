@@ -12,6 +12,7 @@ from ..core.config import settings
 from ..models.sample import Sample, SampleStatus, SampleRegion
 from ..models.user import User
 from ..utils.dependencies import get_current_user, require_teacher_or_above, CurrentUserResponse
+from ..utils.validators import validate_upload_file
 from ..utils.image_processor import auto_crop_sample_image
 
 router = APIRouter(prefix="/samples", tags=["样本管理"])
@@ -76,24 +77,8 @@ async def upload_sample(
     current_user: CurrentUserResponse = Depends(get_current_user)
 ):
     """上传样本图片"""
-    # 验证文件类型
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只能上传图片文件"
-        )
-
-    # 验证文件大小
-    file_size = 0
-    for chunk in file.file:
-        file_size += len(chunk)
-        if file_size > settings.MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB"
-            )
-    # 重置文件指针到开头
-    await file.seek(0)
+    # 验证文件类型和大小
+    await validate_upload_file(file, settings.MAX_UPLOAD_SIZE)
 
     # 确定目标用户ID
     target_user_id = current_user.id

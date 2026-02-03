@@ -13,6 +13,7 @@ import {
   KeyOutlined,
   ClockCircleOutlined,
   ThunderboltOutlined,
+  MonitorOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -71,7 +72,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         key: '/scheduled-tasks',
         icon: <ClockCircleOutlined />,
         label: '定时训练',
-      }
+      },
+    {
+      key: '/monitoring',
+      icon: <MonitorOutlined />,
+      label: '系统监控',
+    }
     );
   }
 

@@ -14,7 +14,6 @@ import {
   Card,
   Descriptions,
   Drawer,
-  Tabs,
   Statistic,
   Row,
   Col,
@@ -31,8 +30,6 @@ import {
   TeamOutlined
 } from '@ant-design/icons';
 import { api } from '../services/api';
-
-const { TabPane } = Tabs;
 
 interface Quota {
   id: number;
@@ -491,8 +488,8 @@ const QuotaManagement: React.FC = () => {
                         showSearch
                         placeholder="请选择用户"
                         filterOption={(input, option) =>
-                          (option?.children as string)
-                            ?.toLowerCase()
+                          String(option?.children || '')
+                            .toLowerCase()
                             .includes(input.toLowerCase())
                         }
                       >
@@ -521,8 +518,8 @@ const QuotaManagement: React.FC = () => {
                         showSearch
                         placeholder="请选择学校"
                         filterOption={(input, option) =>
-                          (option?.children as string)
-                            ?.toLowerCase()
+                          String(option?.children || '')
+                            .toLowerCase()
                             .includes(input.toLowerCase())
                         }
                       >
@@ -546,7 +543,10 @@ const QuotaManagement: React.FC = () => {
                 name="minute_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -555,7 +555,10 @@ const QuotaManagement: React.FC = () => {
                 name="hour_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
           </Row>
@@ -567,7 +570,10 @@ const QuotaManagement: React.FC = () => {
                 name="day_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -576,13 +582,19 @@ const QuotaManagement: React.FC = () => {
                 name="month_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item label="总次数限制" name="total_limit" initialValue={0}>
-            <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+              <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+            </Space.Compact>
           </Form.Item>
 
           <Form.Item label="描述" name="description">
@@ -613,8 +625,8 @@ const QuotaManagement: React.FC = () => {
               placeholder="请选择用户"
               onChange={(values) => setSelectedUserIds(values)}
               filterOption={(input, option) =>
-                (option?.children as string)
-                  ?.toLowerCase()
+                String(option?.children || '')
+                  .toLowerCase()
                   .includes(input.toLowerCase())
               }
             >
@@ -639,7 +651,10 @@ const QuotaManagement: React.FC = () => {
                 name="minute_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -648,7 +663,10 @@ const QuotaManagement: React.FC = () => {
                 name="hour_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
           </Row>
@@ -660,7 +678,10 @@ const QuotaManagement: React.FC = () => {
                 name="day_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -669,13 +690,19 @@ const QuotaManagement: React.FC = () => {
                 name="month_limit"
                 initialValue={0}
               >
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                  <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+                </Space.Compact>
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item label="总次数限制" name="total_limit" initialValue={0}>
-            <InputNumber min={0} style={{ width: '100%' }} addonAfter="次" />
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+              <Input disabled defaultValue="次" style={{ width: '60px', textAlign: 'center' }} />
+            </Space.Compact>
           </Form.Item>
 
           <Form.Item label="描述" name="description">

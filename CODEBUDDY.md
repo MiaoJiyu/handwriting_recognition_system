@@ -23,9 +23,11 @@ All project documentation is organized in the `docs/` directory.
 | **Development Guide** | Detailed development setup and workflow | [DEVELOPMENT](./DEVELOPMENT.md) |
 | **Implementation Check** | System architecture and feature verification | [IMPLEMENTATION_CHECK](./IMPLEMENTATION_CHECK.md) |
 | **User Management Updates** | Batch operations and school management | [USER_MANAGEMENT_UPDATE](./USER_MANAGEMENT_UPDATE.md) |
-| **PaddleOCR Fix** | OCR compatibility and fallback mechanism | [PADDLEOCR_FIX](./PADDLEOCR_FIX.md) |
-| **Recognition Fix** | PCA training and recognition fixes | [RECOGNITION_FIX](./RECOGNITION_FIX.md) |
-| **Paddle Version Fix** | PaddlePaddle version compatibility | [PADDLE_VERSION_FIX](./PADDLE_VERSION_FIX.md) |
+| **Token API** | External API token management | [TOKEN_API](./docs/TOKEN_API.md) |
+| **Token Management** | Token-based authentication and authorization | [TOKEN_MANAGEMENT](./docs/TOKEN_MANAGEMENT.md) |
+| **Scheduled Training** | Automated training and feature updates | [SCHEDULED_TRAINING](./SCHEDULED_TRAINING.md) |
+| **System Management** | System configuration and monitoring | [SYSTEM_MANAGEMENT](./docs/SYSTEM_MANAGEMENT.md) |
+| **Integration Plan** | Code consolidation and refactoring plan | [INTEGRATION_PLAN](./INTEGRATION_PLAN.md) |
 
 ## Common Development Commands
 
@@ -226,7 +228,7 @@ The backend is organized following a layered architecture:
 - **`app/models/`**: SQLAlchemy ORM models (User, School, Sample, UserFeature, RecognitionLog, TrainingJob, Model)
 - **`app/core/`**: Core configuration and database connection
 - **`app/services/`**: Business logic layer (inference_client for gRPC communication)
-- **`app/utils/`**: Utility functions (security, dependencies)
+- **`app/utils/`**: Utility functions (security, dependencies, validators, serializers)
 - **`alembic/`**: Database migration scripts
 
 **Key Design Patterns**:

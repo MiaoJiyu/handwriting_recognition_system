@@ -1,10 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from starlette.responses import Response
 from contextlib import asynccontextmanager
 from .core.config import settings
+from .utils.logger import get_logger
+from .utils.config_validator import validate_all_settings, print_validation_results
+from .middleware.error_handler import error_handler_middleware
+from .middleware.performance import PerformanceMiddleware
 import os
+from datetime import datetime
 from .api import (
     auth_router,
     users_router,
@@ -15,42 +21,80 @@ from .api import (
     config_router,
     system_router,
     token_router,
-    tokens_router,
-    token_management_router,
+    tokens_management_router,
     scheduled_tasks_router,
-    quotas_router
+    quotas_router,
+    monitoring_router
 )
 from .services.task_scheduler import task_scheduler
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
+    logger.info("========== 应用启动 ==========")
+    print("Starting application...")
+
+    # 验证配置
+    try:
+        validation_results = validate_all_settings(settings)
+        print_validation_results(validation_results)
+
+        # 检查是否有失败的验证
+        failed_validations = [k for k, v in validation_results.items() if not v]
+        if failed_validations:
+            error_msg = f"配置验证失败: {', '.join(failed_validations)}。请修正配置后重新启动应用。"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+    except Exception as e:
+        logger.error(f"应用启动失败: {str(e)}")
+        raise
+
+    # 启动任务调度器
     print("Starting task scheduler...")
     try:
         await task_scheduler.start()
         print("Task scheduler started successfully")
+        logger.info("任务调度器启动成功")
     except Exception as e:
         print(f"Failed to start task scheduler: {e}")
+        logger.error(f"任务调度器启动失败: {str(e)}")
+
+    logger.info("应用启动完成")
+    logger.info("========== 应用启动完成 ==========")
 
     yield
 
     # 关闭时
+    print("Stopping application...")
+    logger.info("========== 应用关闭 ==========")
+
+    # 停止任务调度器
     print("Stopping task scheduler...")
     try:
         await task_scheduler.stop()
         print("Task scheduler stopped successfully")
+        logger.info("任务调度器停止成功")
     except Exception as e:
         print(f"Failed to stop task scheduler: {e}")
+        logger.error(f"任务调度器停止失败: {str(e)}")
+
+    logger.info("应用关闭完成")
+    logger.info("========== 应用关闭完成 ==========")
 
 
 app = FastAPI(
     title="字迹识别系统API",
     description="基于Few-shot Learning的字迹识别系统后端API",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan
 )
+
+# 添加性能监控中间件
+app.add_middleware(PerformanceMiddleware)
 
 # CORS配置
 app.add_middleware(
@@ -60,6 +104,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加全局错误处理中间件（必须在CORS之后，作为第一个HTTP中间件）
+@app.middleware("http")
+async def error_handler_wrapper(request, call_next):
+    from .middleware.error_handler import error_handler_middleware
+    return await error_handler_middleware(request, call_next)
 
 # 兜底：StaticFiles 响应有时不会被 CORSMiddleware 补齐 CORS 头（尤其是图片/跨域 canvas 场景）。
 # 这里针对 /uploads/* 强制附加 CORS 响应头。
@@ -123,10 +173,10 @@ app.include_router(samples_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(token_router, prefix="/api")
-app.include_router(tokens_router, prefix="/api")
-app.include_router(token_management_router, prefix="/api")
+app.include_router(tokens_management_router, prefix="/api")
 app.include_router(scheduled_tasks_router, prefix="/api")
 app.include_router(quotas_router, prefix="/api")
+app.include_router(monitoring_router)  # 监控路由已包含 /api 前缀
 
 
 @app.get("/")

@@ -18,6 +18,7 @@ import TokenAPITest from './pages/TokenAPITest';
 import UserCenter from './pages/UserCenter';
 import ScheduledTasks from './pages/ScheduledTasks';
 import QuotaManagement from './pages/QuotaManagement';
+import MonitoringDashboard from './pages/MonitoringDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
 
@@ -42,7 +43,7 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <ConfigProvider locale={zhCN}>
         <AuthProvider>
-          <BrowserRouter>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -59,6 +60,7 @@ const App: React.FC = () => {
                         <Route path="/users" element={<UserManagement />} />
                         <Route path="/training" element={<TrainingManagement />} />
                         <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
+                        <Route path="/monitoring" element={<MonitoringDashboard />} />
                         <Route path="/system" element={<SystemManagement />} />
                         <Route path="/tokens" element={<TokenManagement />} />
                         <Route path="/api-test" element={<TokenAPITest />} />

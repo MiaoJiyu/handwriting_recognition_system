@@ -28,10 +28,10 @@ class UserResponse(BaseModel):
     is_switched: bool = False  # 是否为切换后的用户
     original_user_id: Optional[int] = None  # 原始管理员用户ID
 
-    @field_serializer('created_at')
-    def serialize_created_at(self, dt: Optional[datetime]) -> Optional[str]:
-        """将datetime序列化为ISO 8601格式字符串"""
-        return dt.isoformat() if dt else None
+    @field_serializer('created_at', mode='wrap')
+    def serialize_datetime(self, value: Optional[datetime], _info):
+        """序列化datetime字段为ISO格式字符串"""
+        return value.isoformat() if value else None
 
     class Config:
         from_attributes = True
@@ -124,21 +124,11 @@ class LogoutResponse(BaseModel):
     success: bool
 
 
-# Token黑名单（简单实现，生产环境应使用Redis）
-token_blacklist: set = set()
-
-
-def is_token_blacklisted(token: str) -> bool:
-    """检查token是否在黑名单中"""
-    return token in token_blacklist
-
-
 @router.post("/logout", response_model=LogoutResponse)
 async def logout(original_user: User = Depends(_get_current_user), db: Session = Depends(get_db)):
     """用户登出
 
-    将当前token加入黑名单，使其失效。
-    注意：前端也应该删除本地存储的token。
+    清除切换状态。前端应该删除本地存储的token。
     """
     # 清除切换状态
     if original_user.switched_user_id:
@@ -146,9 +136,6 @@ async def logout(original_user: User = Depends(_get_current_user), db: Session =
         original_user.switched_to_username = None
         original_user.switched_at = None
         db.commit()
-    # 这里简单地返回成功消息
-    # 实际的token失效由前端删除token处理
-    # 如果需要服务端强制失效，可以使用Redis存储黑名单
     return LogoutResponse(
         message="登出成功",
         success=True

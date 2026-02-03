@@ -94,7 +94,7 @@ const TokenManagement: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Fetch tokens
-  const { data: tokensData, isLoading, error } = useQuery({
+  const { data: tokensData, isLoading } = useQuery({
     queryKey: ['tokens'],
     queryFn: async () => {
       const res = await api.get('/tokens/list');
