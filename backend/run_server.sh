@@ -1,6 +1,9 @@
 #!/bin/bash
 # Startup script for the backend server with proper library paths and Python selection
 
+# Suppress Nix-related library loading warnings
+export LD_PRELOAD=""
+
 # Find system Python (not Nix-managed)
 find_system_python() {
     # Common system Python locations
@@ -29,21 +32,21 @@ cd /opt/handwriting_recognition_system/backend
 # If we found a system Python, use it directly with the venv's packages
 if [ -n "$SYSTEM_PYTHON" ]; then
     echo "Using system Python: $SYSTEM_PYTHON"
-    # Use system Python with venv's site-packages
-    export PYTHONPATH="/opt/handwriting_recognition_system/venv/lib/python3.13/site-packages:$PYTHONPATH"
-    exec "$SYSTEM_PYTHON" -m uvicorn app.main:app --reload
+    # Activate the virtual environment
+    source /opt/handwriting_recognition_system/venv/bin/activate
+    exec uvicorn app.main:app --host 0.0.0.0 --reload
 else
     # Fallback: try to use venv Python with Nix workaround
     echo "Warning: Using Nix Python, may have compatibility issues"
     # Unset Nix-specific environment variables that might interfere
     unset NIX_PATH
     unset NIX_PROFILES
-    
+
     # Activate virtual environment if it exists
     if [ -f "/opt/handwriting_recognition_system/venv/bin/activate" ]; then
         source /opt/handwriting_recognition_system/venv/bin/activate
     fi
-    
+
     # Run uvicorn
-    exec uvicorn app.main:app --reload
+    exec uvicorn app.main:app --host 0.0.0.0 --reload
 fi

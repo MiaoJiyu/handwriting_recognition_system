@@ -46,7 +46,11 @@ class Settings(BaseSettings):
         """Parse CORS_ORIGINS from string (JSON or comma-separated) to list."""
         if not self.CORS_ORIGINS or not self.CORS_ORIGINS.strip():
             return ["http://localhost:3000", "http://localhost:5173"]
-        
+
+        # Support wildcard to allow all origins
+        if self.CORS_ORIGINS.strip() == "*":
+            return ["*"]
+
         # Try to parse as JSON first
         try:
             parsed = json.loads(self.CORS_ORIGINS)
@@ -54,7 +58,7 @@ class Settings(BaseSettings):
                 return parsed
         except (json.JSONDecodeError, ValueError):
             pass
-        
+
         # If JSON parsing fails, treat as comma-separated string
         return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
     

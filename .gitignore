@@ -62,3 +62,5 @@ frontend/build/
 
 # 开发文件
 run_frp.sh
+proxy.sh
+unset_proxy.sh
