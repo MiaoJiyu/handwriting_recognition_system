@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     
     # 文件存储配置
-    UPLOAD_DIR: str = "/opt/handwriting_recognition_system/uploads"
-    SAMPLES_DIR: str = "/opt/handwriting_recognition_system/uploads/samples"
+    UPLOAD_DIR: str = "/opt/handwriting_recognition_system/backend/uploads"
+    SAMPLES_DIR: str = "/opt/handwriting_recognition_system/backend/uploads/samples"
     MODELS_DIR: str = "/opt/handwriting_recognition_system/models"
 
     # 文件上传配置
