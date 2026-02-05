@@ -136,6 +136,21 @@ create_backend_service() {
     local service_file="$1"
     echo -e "${YELLOW}创建后端服务文件...${NC}"
 
+    # 创建 PaddleX 缓存目录（解决权限问题）
+    mkdir -p /var/www/.paddlex 2>/dev/null
+    chown -R www-data:www-data /var/www/.paddlex 2>/dev/null
+    chmod 755 /var/www/.paddlex 2>/dev/null
+
+    # 创建并授权后端 logs 目录
+    mkdir -p /opt/handwriting_recognition_system/backend/logs 2>/dev/null
+    chown -R www-data:www-data /opt/handwriting_recognition_system/backend/logs 2>/dev/null
+    chmod 755 /opt/handwriting_recognition_system/backend/logs 2>/dev/null
+
+    # 创建并授权项目根目录 logs（用于 monitoring 日志）
+    mkdir -p /opt/handwriting_recognition_system/logs 2>/dev/null
+    chown -R www-data:www-data /opt/handwriting_recognition_system/logs 2>/dev/null
+    chmod 755 /opt/handwriting_recognition_system/logs 2>/dev/null
+
     # 确定 Python 路径
     local python_path="python3"
     local path_env=""
@@ -173,6 +188,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/opt/handwriting_recognition_system/backend
+Environment="TMPDIR=/tmp"
 $env_lines
 $exec_start_line
 Restart=always
@@ -181,11 +197,11 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=handwriting-backend
 
-# Security settings
+# Security settings (relaxed for Nix environment compatibility)
 NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
 ReadWritePaths=/opt/handwriting_recognition_system/uploads /opt/handwriting_recognition_system/models /tmp
 
 [Install]
@@ -202,6 +218,11 @@ EOF
 create_inference_service() {
     local service_file="$1"
     echo -e "${YELLOW}创建推理服务文件...${NC}"
+
+    # 创建 PaddleX 缓存目录（解决权限问题）
+    mkdir -p /var/www/.paddlex 2>/dev/null
+    chown -R www-data:www-data /var/www/.paddlex 2>/dev/null
+    chmod 755 /var/www/.paddlex 2>/dev/null
 
     # 生成 Environment 行
     local env_lines=""
@@ -234,6 +255,8 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/opt/handwriting_recognition_system/inference_service
+Environment="TMPDIR=/tmp"
+Environment="MPLCONFIGDIR=/tmp"
 $env_lines
 $exec_start_line
 Restart=always
@@ -242,11 +265,11 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=handwriting-inference
 
-# Security settings
+# Security settings (relaxed for Nix environment compatibility)
 NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
 ReadWritePaths=/opt/handwriting_recognition_system/uploads /opt/handwriting_recognition_system/models /tmp
 
 # Optional: If GPU is available, uncomment the following lines

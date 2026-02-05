@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     
     # 文件存储配置
-    UPLOAD_DIR: str = "./uploads"
-    SAMPLES_DIR: str = "./uploads/samples"
-    MODELS_DIR: str = "./models"
+    UPLOAD_DIR: str = "/opt/handwriting_recognition_system/uploads"
+    SAMPLES_DIR: str = "/opt/handwriting_recognition_system/uploads/samples"
+    MODELS_DIR: str = "/opt/handwriting_recognition_system/models"
 
     # 文件上传配置
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB

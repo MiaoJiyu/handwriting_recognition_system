@@ -26,15 +26,16 @@ SYSTEM_PYTHON=$(find_system_python)
 # Set library paths for system libraries
 export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib/gcc/x86_64-linux-gnu/13:${LD_LIBRARY_PATH}
 
+# Add venv packages to PYTHONPATH
+export PYTHONPATH=/opt/handwriting_recognition_system/venv/lib/python3.13/site-packages:${PYTHONPATH}
+
 # Change to backend directory
 cd /opt/handwriting_recognition_system/backend
 
 # If we found a system Python, use it directly with the venv's packages
 if [ -n "$SYSTEM_PYTHON" ]; then
     echo "Using system Python: $SYSTEM_PYTHON"
-    # Activate the virtual environment
-    source /opt/handwriting_recognition_system/venv/bin/activate
-    exec uvicorn app.main:app --host 0.0.0.0 --reload
+    exec "$SYSTEM_PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --reload
 else
     # Fallback: try to use venv Python with Nix workaround
     echo "Warning: Using Nix Python, may have compatibility issues"
